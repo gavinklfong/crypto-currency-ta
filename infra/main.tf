@@ -22,7 +22,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 }
 
 resource "aws_lambda_function" "hello_world" {
-  function_name = "hello-world-lambda-updated"
+  function_name = "hello-world-lambda-updated-2"
   handler       = "lambda_function.lambda_handler"
   runtime       = "python3.12"
 
