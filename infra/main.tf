@@ -1,7 +1,23 @@
 provider "aws" {
-  region = "eu-west-2"
+  region = "us-east-2"
 }
 
+
+# resource "aws_s3_bucket" "tf_state" {
+#   bucket        = "lambda-terraform-state-bucket-164995166068-us-east-2-an"
+#   force_destroy = false
+# }
+
+# # Remote state configuration
+# resource "aws_s3_bucket_versioning" "tf_state_versioning" {
+#   bucket = aws_s3_bucket.tf_state.id
+
+#   versioning_configuration {
+#     status = "Enabled"
+#   }
+# }
+
+# Lambda function and execution role
 resource "aws_iam_role" "lambda_exec" {
   name = "hello-world-lambda-exec"
 

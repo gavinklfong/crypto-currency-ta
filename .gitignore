@@ -1,0 +1,24 @@
+# Ignore build artifacts
+.build/
+.build/*
+
+# Terraform local state
+terraform.tfstate
+terraform.tfstate.backup
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# Terraform working directory
+.terraform/
+.terraform/*
+
+# Terraform lock file (optional — keep it if you want reproducible provider versions)
+# .terraform.lock.hcl
+
+# Python cache (if your Lambda uses Python)
+__pycache__/
+*.pyc
+
+deployment.zip
