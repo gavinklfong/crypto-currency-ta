@@ -9,6 +9,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / "app"
 BUILD_DIR = ROOT / ".build"
+PACKAGE_DIR = ROOT / ".package"
 
 
 def run(cmd):
@@ -20,6 +21,10 @@ def clean():
     if BUILD_DIR.exists():
         shutil.rmtree(BUILD_DIR)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
+
+    if PACKAGE_DIR.exists():
+        shutil.rmtree(PACKAGE_DIR)
+    PACKAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def build_single_lambda(lambda_dir: Path):
@@ -48,7 +53,7 @@ def build_single_lambda(lambda_dir: Path):
             shutil.copy2(item, dest)
 
     # 3. Create ZIP
-    zip_path = ROOT / f"deployment-{lambda_name}.zip"
+    zip_path = PACKAGE_DIR / f"deployment-{lambda_name}.zip"
     with ZipFile(zip_path, "w", ZIP_DEFLATED) as zf:
         for path in temp_dir.rglob("*"):
             if path.is_file():

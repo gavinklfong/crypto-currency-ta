@@ -32,12 +32,12 @@ locals {
   lambdas = {
     hello1 = {
       function_name = "hello-world-lambda-1"
-      zip_path      = "${path.module}/../deployment-function-1.zip"
+      zip_path      = "${path.module}/../.package/deployment-function-1.zip"
       route_key     = "GET /hello-1"
     }
     hello2 = {
       function_name = "hello-world-lambda-2"
-      zip_path      = "${path.module}/../deployment-function-2.zip"
+      zip_path      = "${path.module}/../.package/deployment-function-2.zip"
       route_key     = "GET /hello-2"
     }
   }
