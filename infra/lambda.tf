@@ -67,6 +67,13 @@ resource "aws_lambda_function" "lambda" {
   source_code_hash = filebase64sha256(each.value.zip_path)
 
   role = aws_iam_role.lambda_exec.arn
+
+  environment {
+    variables = {
+      TIMESTREAM_DATABASE_NAME = local.timestream_database_name
+      TIMESTREAM_TABLE_NAME    = local.timestream_table_name
+    }
+  }
 }
 
 ########################################
