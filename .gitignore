@@ -1,6 +1,8 @@
 # Ignore build artifacts
 .build/
 .build/*
+.package/
+.package/*
 
 # Terraform local state
 terraform.tfstate
