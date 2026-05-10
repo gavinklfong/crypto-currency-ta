@@ -20,6 +20,24 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy" "lambda_dynamodb_write" {
+  name = "lambda-dynamodb-write-policy"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:GetItem",
+      ]
+      Resource = aws_dynamodb_table.market_data.arn
+    }]
+  })
+}
+
 
 ########################################
 # Lambda Functions
@@ -36,18 +54,4 @@ resource "aws_lambda_function" "lambda" {
   source_code_hash = filebase64sha256(each.value.zip_path)
 
   role = aws_iam_role.lambda_exec.arn
-}
-
-########################################
-# Lambda Permissions (auto-generated)
-########################################
-
-resource "aws_lambda_permission" "allow_apigw" {
-  for_each = var.lambdas
-
-  statement_id  = "AllowAPIGatewayInvoke-${each.key}"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.lambda[each.key].function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*/*"
 }

@@ -34,12 +34,14 @@ variable "lambdas" {
     function_name = string
     zip_path      = string
     route_key     = string
+    schedule      = optional(string) # e.g. "rate(1 minute)"
   }))
   default = {
-    hello1 = {
-      function_name = "crypto-currency-ta-lambda-1"
-      zip_path      = "../.package/deployment-function-1.zip"
-      route_key     = "GET /hello-1"
+    fetch_market_data = {
+      function_name = "fetch-market-data"
+      zip_path      = "../.package/fetch-market-data.zip"
+      route_key     = "GET /trigger-fetch-market-data"
+      schedule      = "rate(1 minute)"
     }
     hello2 = {
       function_name = "crypto-currency-ta-lambda-2"

@@ -49,6 +49,20 @@ resource "aws_apigatewayv2_stage" "default_stage" {
 }
 
 ########################################
+# Lambda Permissions (auto-generated)
+########################################
+resource "aws_lambda_permission" "allow_apigw" {
+  for_each = var.lambdas
+
+  statement_id  = "AllowAPIGatewayInvoke-${each.key}"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.lambda[each.key].function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*/*"
+}
+
+
+########################################
 # API Gateway Outputs
 ########################################
 
