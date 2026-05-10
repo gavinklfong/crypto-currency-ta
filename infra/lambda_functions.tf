@@ -32,8 +32,12 @@ resource "aws_iam_role_policy" "lambda_dynamodb_write" {
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
         "dynamodb:GetItem",
+        "dynamodb:BatchWriteItem"
       ]
-      Resource = aws_dynamodb_table.market_data.arn
+      Resource = [
+        aws_dynamodb_table.market_data.arn,
+        "${aws_dynamodb_table.market_data.arn}/*"
+      ]
     }]
   })
 }
