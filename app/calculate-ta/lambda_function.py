@@ -3,6 +3,7 @@ import decimal
 from datetime import datetime, timezone
 import logging
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -171,7 +172,7 @@ def calculate_single(event):
         raise RuntimeError(f"MARKET_DATA_NOT_AVAILABLE, ts:{timestamp}")
 
     # ----------------------------------------------------
-    # 2. Extract the last 10 candles
+    # 2. Extract last 10 timestamps
     # ----------------------------------------------------
     last_10 = window[-10:] if len(window) >= 10 else window
     last_10_timestamps = [extract_timestamp_from_sk(i["SK"]) for i in last_10]
@@ -179,62 +180,37 @@ def calculate_single(event):
     log_info("Processing last 10 candles", timestamps=last_10_timestamps)
 
     # ----------------------------------------------------
-    # 3. Precompute closes and index mapping
+    # 3. Precompute closes + index mapping
     # ----------------------------------------------------
     closes_all = [float(i["close"]) for i in window]
     index_by_ts = {extract_timestamp_from_sk(i["SK"]): idx for idx, i in enumerate(window)}
 
-    # ----------------------------------------------------
-    # 4. Build batch write payload
-    # ----------------------------------------------------
-    batch_items = []
+    results = []
 
+    # ----------------------------------------------------
+    # 4. Compute TA and write each item safely (UpdateItem)
+    # ----------------------------------------------------
     for ts in last_10_timestamps:
         idx = index_by_ts[ts]
         closes = closes_all[: idx + 1]
 
         ta = compute_all_ta(closes)
 
-        # Build full item for PutRequest
-        pk = f"PAIR#{pair}"
-        sk = f"TF#{timeframe}#TS#{ts}"
+        # Safe DynamoDB update (does NOT overwrite entire item)
+        write_ta_to_dynamodb(pair, timeframe, ts, ta)
 
-        # Find the original candle item
-        original_item = next(i for i in window if extract_timestamp_from_sk(i["SK"]) == ts)
+        log_info("TA written", pair=pair, timeframe=timeframe, timestamp=ts)
 
-        # Merge TA into the item
-        new_item = dict(original_item)
-        new_item["ta"] = ta
-
-        # Convert Python types to DynamoDB JSON types
-        marshalled = boto3.dynamodb.types.TypeSerializer().serialize(new_item)["M"]
-
-        batch_items.append({
-            "PutRequest": {
-                "Item": marshalled
-            }
+        results.append({
+            "timestamp": ts,
+            "ta": ta
         })
-
-    # ----------------------------------------------------
-    # 5. Execute batch write (single operation)
-    # ----------------------------------------------------
-    client = boto3.client("dynamodb")
-
-    request = {TABLE_NAME: batch_items}
-    while True:
-        resp = client.batch_write_item(RequestItems=request)
-        unprocessed = resp.get("UnprocessedItems", {})
-        if not unprocessed:
-            break
-        request = unprocessed  # retry
-
-    log_info("Batch TA write completed", count=len(batch_items))
 
     return {
         "pair": pair,
         "timeframe": timeframe,
-        "processed": len(batch_items),
-        "timestamps": last_10_timestamps
+        "processed": len(results),
+        "details": results
     }
 
 # ============================================================
