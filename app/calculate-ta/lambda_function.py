@@ -185,33 +185,60 @@ def calculate_single(event):
     closes_all = [float(i["close"]) for i in window]
     index_by_ts = {extract_timestamp_from_sk(i["SK"]): idx for idx, i in enumerate(window)}
 
-    results = []
+    # Map timestamp → original candle item
+    candle_by_ts = {extract_timestamp_from_sk(i["SK"]): i for i in window}
 
     # ----------------------------------------------------
-    # 4. Compute TA and write each item safely (UpdateItem)
+    # 4. Compute TA and build PutRequests
     # ----------------------------------------------------
+    serializer = boto3.dynamodb.types.TypeSerializer()
+    batch_items = []
+
     for ts in last_10_timestamps:
         idx = index_by_ts[ts]
         closes = closes_all[: idx + 1]
 
         ta = compute_all_ta(closes)
 
-        # Safe DynamoDB update (does NOT overwrite entire item)
-        write_ta_to_dynamodb(pair, timeframe, ts, ta)
+        # Merge TA into original item
+        original_item = candle_by_ts[ts]
+        new_item = dict(original_item)
+        new_item["ta"] = ta
 
-        log_info("TA written", pair=pair, timeframe=timeframe, timestamp=ts)
+        # Serialize to DynamoDB JSON
+        marshalled = serializer.serialize(new_item)["M"]
 
-        results.append({
-            "timestamp": ts,
-            "ta": ta
+        batch_items.append({
+            "PutRequest": {
+                "Item": marshalled
+            }
         })
+
+    # ----------------------------------------------------
+    # 5. Batch write in chunks of 25
+    # ----------------------------------------------------
+    client = boto3.client("dynamodb")
+
+    for i in range(0, len(batch_items), 25):
+        chunk = batch_items[i:i+25]
+        request = {TABLE_NAME: chunk}
+
+        while True:
+            resp = client.batch_write_item(RequestItems=request)
+            unprocessed = resp.get("UnprocessedItems", {})
+            if not unprocessed:
+                break
+            request = unprocessed  # retry
+
+    log_info("Batch TA write completed", count=len(batch_items))
 
     return {
         "pair": pair,
         "timeframe": timeframe,
-        "processed": len(results),
-        "details": results
+        "processed": len(batch_items),
+        "timestamps": last_10_timestamps
     }
+
 
 # ============================================================
 # RANGE RE-CALCULATION MODE
