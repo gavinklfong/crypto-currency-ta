@@ -23,15 +23,11 @@ def chunked(iterable, size=25):
             break
         yield batch
 
-
 def write_ohlc_to_dynamodb(pair, timeframe_minutes, ohlc_data):
-    """Bulk write OHLC data to DynamoDB using batch_write_item."""
-    
-    items = []
     now_ts = int(datetime.now().timestamp())
     timeframe_str = f"{timeframe_minutes}m"
+    written = 0
 
-    # Build all items first
     for candle in ohlc_data:
         timestamp = int(candle[0])
         open_price = float(candle[1])
@@ -59,27 +55,20 @@ def write_ohlc_to_dynamodb(pair, timeframe_minutes, ohlc_data):
             "created_at": {"N": str(now_ts)},
         }
 
-        items.append({"PutRequest": {"Item": item}})
+        try:
+            dynamodb_client.put_item(
+                TableName=DYNAMODB_TABLE_NAME,
+                Item=item,
+                ConditionExpression="attribute_not_exists(PK)"
+            )
+            written += 1
 
-    # Batch write in chunks of 25
-    total_written = 0
+        except dynamodb_client.exceptions.ConditionalCheckFailedException:
+            # Item already exists → skip
+            continue
 
-    for batch in chunked(items, 25):
-        request_items = {DYNAMODB_TABLE_NAME: batch}
+    return written
 
-        while True:
-            response = dynamodb_client.batch_write_item(RequestItems=request_items)
-
-            # Retry unprocessed items
-            unprocessed = response.get("UnprocessedItems", {})
-            if unprocessed and DYNAMODB_TABLE_NAME in unprocessed:
-                request_items = unprocessed
-            else:
-                break
-
-        total_written += len(batch)
-
-    return total_written
 
 def lambda_handler(event, context):
     params = {
@@ -100,7 +89,8 @@ def lambda_handler(event, context):
         # Kraken returns a dict with the pair name as the key
         pair_key = list(data["result"].keys())[0]
         ohlc = data["result"][pair_key]
-        records_to_persist = ohlc[:-10]
+        records_to_persist = ohlc[-10:]
+
 
         # Write the most recent 10 OHLC data points to DynamoDB
         records_written = write_ohlc_to_dynamodb(pair_key, params["interval"], records_to_persist)
@@ -125,7 +115,7 @@ def lambda_handler(event, context):
                     "pair": pair_key,
                     "count": len(ohlc),
                     "records_written_to_dynamodb": records_written,
-                    "ohlc": ohlc,
+                    "ohlc": records_to_persist,
                 }
             ),
         }

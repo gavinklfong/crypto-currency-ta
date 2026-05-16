@@ -34,6 +34,7 @@ def compute_ema(values, period):
 
 def compute_rsi(values, period=14):
     if len(values) < period + 1:
+        log_info("Not enough data to compute RSI", values_count=len(values), required=period+1)
         return None
 
     window = values[-(period + 1):]
@@ -55,6 +56,7 @@ def compute_rsi(values, period=14):
 
 def compute_macd(values, fast=12, slow=26, signal=9):
     if len(values) < slow + signal:
+        log_info("Not enough data to compute MACD", values_count=len(values), required=slow+signal)
         return None, None, None
 
     ema_fast = compute_ema(values[-(slow+signal):], fast)
@@ -175,12 +177,12 @@ def calculate_single(event):
         raise RuntimeError(f"MARKET_DATA_NOT_AVAILABLE, ts:{timestamp}")
 
     # ----------------------------------------------------
-    # 2. Extract last 10 timestamps
+    # 2. Extract last timestamps
     # ----------------------------------------------------
-    last_10 = window[-10:] if len(window) >= 10 else window
-    last_10_timestamps = [extract_timestamp_from_sk(i["SK"]) for i in last_10]
+    last_window = window[-10:] if len(window) >= 10 else window
+    last_timestamps = [extract_timestamp_from_sk(i["SK"]) for i in last_window]
 
-    log_info("Processing last 10 candles", timestamps=last_10_timestamps)
+    log_info("Processing last candles", timestamps=last_timestamps)
 
     # ----------------------------------------------------
     # 3. Precompute closes + index mapping
@@ -188,60 +190,45 @@ def calculate_single(event):
     closes_all = [float(i["close"]) for i in window]
     index_by_ts = {extract_timestamp_from_sk(i["SK"]): idx for idx, i in enumerate(window)}
 
-    # Map timestamp → original candle item
-    candle_by_ts = {extract_timestamp_from_sk(i["SK"]): i for i in window}
+    results = []
 
     # ----------------------------------------------------
-    # 4. Compute TA and build PutRequests
+    # 4. Compute TA and update each item (UpdateItem)
     # ----------------------------------------------------
-    serializer = boto3.dynamodb.types.TypeSerializer()
-    batch_items = []
-
-    for ts in last_10_timestamps:
+    for ts in last_timestamps:
         idx = index_by_ts[ts]
         closes = closes_all[: idx + 1]
 
+        log_info("closes fetched", timestamp=ts, closes_count=len(closes), timestamp_index=idx)
         ta = compute_all_ta(closes)
 
-        # Merge TA into original item
-        original_item = candle_by_ts[ts]
-        new_item = dict(original_item)
-        new_item["ta"] = ta
+        if not ta or len(ta.keys()) == 0:
+            log_info("Skipping TA update due to insufficient history", timestamp=ts)
+            continue
 
-        # Serialize to DynamoDB JSON
-        marshalled = serializer.serialize(new_item)["M"]
+        # Safe partial update — does NOT overwrite the item
+        pk = f"PAIR#{pair}"
+        sk = f"TF#{timeframe}#TS#{ts}"
 
-        batch_items.append({
-            "PutRequest": {
-                "Item": marshalled
-            }
+        table.update_item(
+            Key={"PK": pk, "SK": sk},
+            UpdateExpression="SET ta = :ta",
+            ExpressionAttributeValues={":ta": ta}
+        )
+
+        log_info("TA written", pair=pair, timeframe=timeframe, timestamp=ts)
+
+        results.append({
+            "timestamp": ts,
+            "ta": ta
         })
-
-    # ----------------------------------------------------
-    # 5. Batch write in chunks of 25
-    # ----------------------------------------------------
-    client = boto3.client("dynamodb")
-
-    for i in range(0, len(batch_items), 25):
-        chunk = batch_items[i:i+25]
-        request = {TABLE_NAME: chunk}
-
-        while True:
-            resp = client.batch_write_item(RequestItems=request)
-            unprocessed = resp.get("UnprocessedItems", {})
-            if not unprocessed:
-                break
-            request = unprocessed  # retry
-
-    log_info("Batch TA write completed", count=len(batch_items))
 
     return {
         "pair": pair,
         "timeframe": timeframe,
-        "processed": len(batch_items),
-        "timestamps": last_10_timestamps
+        "processed": len(results),
+        "details": results
     }
-
 
 # ============================================================
 # RANGE RE-CALCULATION MODE
