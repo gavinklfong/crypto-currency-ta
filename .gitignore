@@ -3,6 +3,8 @@
 .build/*
 .package/
 .package/*
+.hashes/
+.hashes/*
 
 # Terraform local state
 terraform.tfstate
