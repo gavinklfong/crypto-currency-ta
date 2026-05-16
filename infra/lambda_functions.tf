@@ -42,6 +42,22 @@ resource "aws_iam_role_policy" "lambda_dynamodb_write" {
   })
 }
 
+resource "aws_iam_role_policy" "lambda_eventbridge_put" {
+  name = "lambda-eventbridge-put-policy"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "events:PutEvents"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
 
 ########################################
 # Lambda Functions
