@@ -105,6 +105,49 @@ class TestComputeEMA(unittest.TestCase):
         # EMA with larger period should smooth more
         # (though they all converge on same data, this is just sanity check)
         self.assertGreater(ema_20, 0)
+    
+    def test_ema_20_exact_value_on_last_20_candles(self):
+        """Test EMA(20) exact value on last 20 sample data points."""
+        last_20 = self.closes[-20:]
+        ema_20 = compute_ema(last_20, 20)
+        
+        # Verify exact value from sample CSV data
+        expected = 80750.82245806116
+        self.assertAlmostEqual(ema_20, expected, places=5,
+                             msg=f"Expected EMA(20)={expected}, got {ema_20}")
+    
+    def test_ema_50_exact_value_on_last_50_candles(self):
+        """Test EMA(50) exact value on last 50 sample data points."""
+        last_50 = self.closes[-50:]
+        ema_50 = compute_ema(last_50, 50)
+        
+        # Verify exact value from sample CSV data
+        expected = 80748.9618989826
+        self.assertAlmostEqual(ema_50, expected, places=5,
+                             msg=f"Expected EMA(50)={expected}, got {ema_50}")
+    
+    def test_ema_consistency_multiple_runs(self):
+        """Test that EMA calculation is deterministic and consistent."""
+        # Run calculation multiple times
+        ema1 = compute_ema(self.closes[-20:], 20)
+        ema2 = compute_ema(self.closes[-20:], 20)
+        ema3 = compute_ema(self.closes[-20:], 20)
+        
+        # All should be identical
+        self.assertEqual(ema1, ema2)
+        self.assertEqual(ema2, ema3)
+    
+    def test_ema_full_dataset_bounds(self):
+        """Test EMA on full dataset stays within expected bounds."""
+        ema = compute_ema(self.closes, 20)
+        
+        # EMA should always be between min and max of data
+        self.assertGreaterEqual(ema, min(self.closes))
+        self.assertLessEqual(ema, max(self.closes))
+        
+        # Specific bounds check
+        self.assertGreater(ema, 80700)
+        self.assertLess(ema, 80800)
 
 
 if __name__ == "__main__":

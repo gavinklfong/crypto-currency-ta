@@ -165,6 +165,64 @@ class TestComputeMACD(unittest.TestCase):
         self.assertIsNotNone(macd_line)
         self.assertIsNotNone(signal_line)
         self.assertIsNotNone(histogram)
+    
+    def test_macd_exact_values_on_full_data(self):
+        """Test MACD exact values on full sample data."""
+        macd_line, signal_line, histogram = compute_macd(self.closes, fast=12, slow=26, signal=9)
+        
+        # Verify exact values from sample CSV data
+        expected_line = 9.237399617530173
+        expected_signal = 3.9416095332395145
+        expected_histogram = 5.295790084290658
+        
+        self.assertIsNotNone(macd_line)
+        self.assertIsNotNone(signal_line)
+        self.assertIsNotNone(histogram)
+        
+        self.assertAlmostEqual(macd_line, expected_line, places=5,
+                             msg=f"Expected MACD line={expected_line}, got {macd_line}")
+        self.assertAlmostEqual(signal_line, expected_signal, places=5,
+                             msg=f"Expected Signal line={expected_signal}, got {signal_line}")
+        self.assertAlmostEqual(histogram, expected_histogram, places=5,
+                             msg=f"Expected Histogram={expected_histogram}, got {histogram}")
+    
+    def test_macd_histogram_equals_line_minus_signal(self):
+        """Test that histogram = MACD line - signal line on actual data."""
+        macd_line, signal_line, histogram = compute_macd(self.closes)
+        
+        self.assertIsNotNone(histogram)
+        # Verify the mathematical relationship
+        calculated_histogram = macd_line - signal_line
+        self.assertAlmostEqual(histogram, calculated_histogram, places=10,
+                             msg=f"Histogram should equal (line - signal), got {histogram} != {calculated_histogram}")
+    
+    def test_macd_consistency_multiple_runs(self):
+        """Test that MACD calculation is deterministic and consistent."""
+        # Run calculation multiple times
+        macd1_line, macd1_signal, macd1_hist = compute_macd(self.closes)
+        macd2_line, macd2_signal, macd2_hist = compute_macd(self.closes)
+        macd3_line, macd3_signal, macd3_hist = compute_macd(self.closes)
+        
+        # All runs should produce identical results
+        self.assertEqual(macd1_line, macd2_line)
+        self.assertEqual(macd2_line, macd3_line)
+        self.assertEqual(macd1_signal, macd2_signal)
+        self.assertEqual(macd2_signal, macd3_signal)
+        self.assertEqual(macd1_hist, macd2_hist)
+        self.assertEqual(macd2_hist, macd3_hist)
+    
+    def test_macd_values_are_in_reasonable_range(self):
+        """Test that MACD values are in reasonable range for price data."""
+        macd_line, signal_line, histogram = compute_macd(self.closes)
+        
+        # For BTC prices around 80k, MACD values should be relatively small
+        self.assertIsNotNone(macd_line)
+        self.assertIsNotNone(signal_line)
+        
+        # MACD should be much smaller than the price itself
+        self.assertLess(abs(macd_line), 100)
+        self.assertLess(abs(signal_line), 100)
+        self.assertLess(abs(histogram), 100)
 
 
 if __name__ == "__main__":

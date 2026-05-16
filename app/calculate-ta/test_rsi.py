@@ -131,6 +131,47 @@ class TestComputeRSI(unittest.TestCase):
         
         self.assertIsNotNone(rsi)
         self.assertGreater(rsi, 70)  # Should be overbought
+    
+    def test_rsi_14_exact_value_on_full_data(self):
+        """Test RSI(14) exact value on full sample data."""
+        rsi_14 = compute_rsi(self.closes, period=14)
+        
+        # Verify exact value from sample CSV data
+        expected = 72.79358132749721
+        self.assertIsNotNone(rsi_14)
+        self.assertAlmostEqual(rsi_14, expected, places=5,
+                             msg=f"Expected RSI(14)={expected}, got {rsi_14}")
+    
+    def test_rsi_7_exact_value_on_full_data(self):
+        """Test RSI(7) exact value on full sample data."""
+        rsi_7 = compute_rsi(self.closes, period=7)
+        
+        # Verify exact value from sample CSV data
+        expected = 75.09578544061858
+        self.assertIsNotNone(rsi_7)
+        self.assertAlmostEqual(rsi_7, expected, places=5,
+                             msg=f"Expected RSI(7)={expected}, got {rsi_7}")
+    
+    def test_rsi_consistency_multiple_runs(self):
+        """Test that RSI calculation is deterministic and consistent."""
+        # Run calculation multiple times
+        rsi1 = compute_rsi(self.closes, period=14)
+        rsi2 = compute_rsi(self.closes, period=14)
+        rsi3 = compute_rsi(self.closes, period=14)
+        
+        # All should be identical
+        self.assertEqual(rsi1, rsi2)
+        self.assertEqual(rsi2, rsi3)
+    
+    def test_rsi_recent_30_candles_value(self):
+        """Test RSI(14) on recent 30 candles has reasonable value."""
+        recent_30 = self.closes[-30:]
+        rsi = compute_rsi(recent_30, period=14)
+        
+        self.assertIsNotNone(rsi)
+        # From the full data RSI(14) is ~72.79, recent should be in similar range
+        self.assertGreater(rsi, 50)
+        self.assertLessEqual(rsi, 100)
 
 
 if __name__ == "__main__":
