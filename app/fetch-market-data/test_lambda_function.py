@@ -9,9 +9,11 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    def test_lambda_handler_success(self, mock_get, mock_dynamodb):
+    @patch("lambda_function.events")
+    def test_lambda_handler_success(self, mock_events, mock_get, mock_dynamodb):
         """Test lambda handler with successful Kraken API response and DynamoDB write"""
         mock_dynamodb.put_item.return_value = {}
+        mock_events.put_events.return_value = {}
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -32,6 +34,7 @@ class TestLambdaHandler:
         assert body["pair"] == "XBTUSD"
         assert body["count"] == 2
         assert body["records_written_to_dynamodb"] == 2
+        assert "ohlc" in body
 
         # Verify Kraken API was called with correct parameters
         mock_get.assert_called_once()
@@ -40,17 +43,18 @@ class TestLambdaHandler:
         assert call_args[1]["params"]["pair"] == "XBTUSD"
         assert call_args[1]["params"]["interval"] == 1
 
-        # Verify DynamoDB put_item was called twice (for each candle)
-        mock_dynamodb.batch_write_item.assert_called_once()
-        batch = mock_dynamodb.batch_write_item.call_args[1]["RequestItems"]["crypto-currency-ta-market-data"]
-        assert len(batch) == 2
+        # Verify DynamoDB put_item was called twice (for each of the last 10 or fewer candles)
+        # Since we have 2 candles, put_item should be called 2 times
+        assert mock_dynamodb.put_item.call_count == 2
 
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    def test_lambda_handler_dynamodb_put_item_called(self, mock_get, mock_dynamodb):
+    @patch("lambda_function.events")
+    def test_lambda_handler_dynamodb_put_item_called(self, mock_events, mock_get, mock_dynamodb):
         """Test that put_item is called with correct table name"""
         mock_dynamodb.put_item.return_value = {}
+        mock_events.put_events.return_value = {}
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -66,15 +70,17 @@ class TestLambdaHandler:
         lambda_handler({}, {})
 
         # Verify put_item was called with correct table
-        mock_dynamodb.batch_write_item.assert_called_once()
-        call_kwargs = mock_dynamodb.batch_write_item.call_args[1]
-        assert "crypto-currency-ta-market-data" in call_kwargs["RequestItems"]
+        mock_dynamodb.put_item.assert_called_once()
+        call_kwargs = mock_dynamodb.put_item.call_args[1]
+        assert call_kwargs["TableName"] == "crypto-currency-ta-market-data"
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    def test_lambda_handler_dynamodb_item_structure(self, mock_get, mock_dynamodb):
+    @patch("lambda_function.events")
+    def test_lambda_handler_dynamodb_item_structure(self, mock_events, mock_get, mock_dynamodb):
         """Test that DynamoDB items have correct structure with correct keys"""
         mock_dynamodb.put_item.return_value = {}
+        mock_events.put_events.return_value = {}
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -90,8 +96,8 @@ class TestLambdaHandler:
         lambda_handler({}, {})
 
         # Get the item passed to put_item
-        call_kwargs = mock_dynamodb.batch_write_item.call_args[1]
-        item = call_kwargs["RequestItems"]["crypto-currency-ta-market-data"][0]["PutRequest"]["Item"]
+        call_kwargs = mock_dynamodb.put_item.call_args[1]
+        item = call_kwargs["Item"]
 
         # Verify key structure: PAIR#<symbol> and TF#<timeframe>#TS#<epoch>
         assert item["PK"]["S"] == "PAIR#XBTUSD"
@@ -112,7 +118,8 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    def test_lambda_handler_kraken_error(self, mock_get, mock_dynamodb):
+    @patch("lambda_function.events")
+    def test_lambda_handler_kraken_error(self, mock_events, mock_get, mock_dynamodb):
         """Test lambda handler when Kraken API returns an error"""
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -130,7 +137,8 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    def test_lambda_handler_request_timeout(self, mock_get, mock_dynamodb):
+    @patch("lambda_function.events")
+    def test_lambda_handler_request_timeout(self, mock_events, mock_get, mock_dynamodb):
         """Test lambda handler when request times out"""
         mock_get.side_effect = Exception("Request timeout")
 
@@ -144,9 +152,11 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    def test_lambda_handler_dynamodb_write_failure(self, mock_get, mock_dynamodb):
+    @patch("lambda_function.events")
+    def test_lambda_handler_dynamodb_write_failure(self, mock_events, mock_get, mock_dynamodb):
         """Test lambda handler when DynamoDB write fails"""
-        mock_dynamodb.batch_write_item.side_effect = Exception("DynamoDB connection error")
+        mock_dynamodb.put_item.side_effect = Exception("DynamoDB connection error")
+        mock_events.put_events.return_value = {}
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -167,9 +177,11 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    def test_lambda_handler_multiple_ohlc_records(self, mock_get, mock_dynamodb):
+    @patch("lambda_function.events")
+    def test_lambda_handler_multiple_ohlc_records(self, mock_events, mock_get, mock_dynamodb):
         """Test lambda handler writes multiple OHLC candles to DynamoDB"""
         mock_dynamodb.put_item.return_value = {}
+        mock_events.put_events.return_value = {}
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -193,15 +205,15 @@ class TestLambdaHandler:
         assert body["records_written_to_dynamodb"] == 3
 
         # Verify put_item was called 3 times (once for each candle)
-        mock_dynamodb.batch_write_item.assert_called_once()
-        batch = mock_dynamodb.batch_write_item.call_args[1]["RequestItems"]["crypto-currency-ta-market-data"]
-        assert len(batch) == 3
+        assert mock_dynamodb.put_item.call_count == 3
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    def test_lambda_handler_response_includes_ohlc_data(self, mock_get, mock_dynamodb):
+    @patch("lambda_function.events")
+    def test_lambda_handler_response_includes_ohlc_data(self, mock_events, mock_get, mock_dynamodb):
         """Test that lambda handler response includes original OHLC data"""
         mock_dynamodb.put_item.return_value = {}
+        mock_events.put_events.return_value = {}
 
         ohlc_data = [
             [1704067200, 42000, 42500, 41500, 42200, 42100, 1000.5],
@@ -224,11 +236,13 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    def test_lambda_handler_writes_in_batch_mode(self, mock_get, mock_dynamodb):
-        """Verify that DynamoDB batch_write_item is used for bulk writes"""
+    @patch("lambda_function.events")
+    def test_lambda_handler_writes_in_sequence(self, mock_events, mock_get, mock_dynamodb):
+        """Verify that DynamoDB put_item is called for each candle"""
 
-        # Mock batch_write_item to return no unprocessed items
-        mock_dynamodb.batch_write_item.return_value = {"UnprocessedItems": {}}
+        # Mock put_item to succeed
+        mock_dynamodb.put_item.return_value = {}
+        mock_events.put_events.return_value = {}
 
         # Mock Kraken API response with 3 candles
         mock_response = MagicMock()
@@ -253,20 +267,8 @@ class TestLambdaHandler:
         assert body["count"] == 3
         assert body["records_written_to_dynamodb"] == 3
 
-        # Ensure batch_write_item was called exactly once
-        mock_dynamodb.batch_write_item.assert_called_once()
-
-        # Extract call arguments
-        call_args = mock_dynamodb.batch_write_item.call_args[1]
-        assert "RequestItems" in call_args
-        assert "crypto-currency-ta-market-data" in call_args["RequestItems"]
-
-        # Ensure 3 PutRequests were included in the batch
-        put_requests = call_args["RequestItems"]["crypto-currency-ta-market-data"]
-        assert len(put_requests) == 3
-
-        # Ensure put_item was NOT used anymore
-        assert not mock_dynamodb.put_item.called
+        # Ensure put_item was called 3 times
+        assert mock_dynamodb.put_item.call_count == 3
 
 
 if __name__ == "__main__":

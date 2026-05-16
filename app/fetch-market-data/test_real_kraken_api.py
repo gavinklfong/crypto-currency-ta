@@ -6,15 +6,17 @@ import lambda_function  # your lambda file
 
 
 @pytest.mark.integration
-@patch("lambda_function.write_ohlc_to_dynamodb")
-def test_lambda_handler_real_kraken(mock_write):
+@patch("lambda_function.events")
+@patch("lambda_function.dynamodb_client")
+def test_lambda_handler_real_kraken(mock_dynamodb, mock_events):
     """
     Real integration test that calls the live Kraken OHLC API.
-    DynamoDB writes are mocked.
+    DynamoDB writes and EventBridge puts are mocked.
     """
 
-    # Mock DynamoDB writer to avoid real AWS calls
-    mock_write.return_value = 999  # arbitrary number
+    # Mock DynamoDB and events to avoid real AWS calls
+    mock_dynamodb.put_item.return_value = {}
+    mock_events.put_events.return_value = {}
 
     # Call the Lambda handler (this will hit the real Kraken API)
     result = lambda_function.lambda_handler({}, {})
@@ -28,7 +30,10 @@ def test_lambda_handler_real_kraken(mock_write):
     assert "ohlc" in body
     assert "count" in body
     assert isinstance(body["ohlc"], list)
-    assert body["count"] == len(body["ohlc"])
+    # count is total from Kraken, but ohlc only contains last 10
+    assert body["count"] >= len(body["ohlc"])
+    # ohlc should be the last 10 candles (or fewer if less than 10 total)
+    assert len(body["ohlc"]) <= 10
 
     # Validate OHLC candle structure
     first_candle = body["ohlc"][0]
@@ -44,5 +49,7 @@ def test_lambda_handler_real_kraken(mock_write):
     assert isinstance(first_candle[6], str)  # volume
     assert isinstance(first_candle[7], int)  # count
 
-    # Ensure DynamoDB writer was called
-    mock_write.assert_called_once()
+    # Ensure DynamoDB put_item was called
+    assert mock_dynamodb.put_item.called
+    # Ensure EventBridge put_events was called
+    assert mock_events.put_events.called
