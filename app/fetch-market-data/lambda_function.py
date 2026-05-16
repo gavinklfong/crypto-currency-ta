@@ -4,6 +4,9 @@ import boto3
 from datetime import datetime
 from itertools import islice
 
+
+SYMBOL = "XBTUSD"  # Bitcoin/USD       
+CANDLE_INTERVAL = 1  # 1-minute candles (triggered every 1 minute)
 KRAKEN_OHLC_URL = "https://api.kraken.com/0/public/OHLC"
 DYNAMODB_TABLE_NAME = "crypto-currency-ta-market-data"
 
@@ -79,8 +82,8 @@ def write_ohlc_to_dynamodb(pair, timeframe_minutes, ohlc_data):
 
 def lambda_handler(event, context):
     params = {
-        "pair": "XBTUSD",  # Bitcoin/USD
-        "interval": 1,  # 1-minute candles (triggered every 1 minute)
+        "pair": SYMBOL,
+        "interval": CANDLE_INTERVAL
     }
 
     try:
@@ -97,8 +100,8 @@ def lambda_handler(event, context):
         pair_key = list(data["result"].keys())[0]
         ohlc = data["result"][pair_key]
 
-        # Write OHLC data to DynamoDB
-        records_written = write_ohlc_to_dynamodb(pair_key, params["interval"], ohlc)
+        # Write the most recent 10 OHLC data points to DynamoDB
+        records_written = write_ohlc_to_dynamodb(pair_key, params["interval"], ohlc[:-10])
 
         return {
             "statusCode": 200,

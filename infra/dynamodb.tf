@@ -8,6 +8,10 @@ resource "aws_dynamodb_table" "market_data" {
   hash_key     = "PK"
   range_key    = "SK"
 
+  # DynamoDB schema
+  # PK: PAIR#<symbol>
+  # SK: TF#<timeframe>#TS#<timestamp>
+
   attribute {
     name = "PK"
     type = "S"
