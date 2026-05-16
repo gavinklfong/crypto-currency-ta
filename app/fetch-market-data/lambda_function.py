@@ -100,9 +100,10 @@ def lambda_handler(event, context):
         # Kraken returns a dict with the pair name as the key
         pair_key = list(data["result"].keys())[0]
         ohlc = data["result"][pair_key]
+        records_to_persist = ohlc[:-10]
 
         # Write the most recent 10 OHLC data points to DynamoDB
-        records_written = write_ohlc_to_dynamodb(pair_key, params["interval"], ohlc[:-10])
+        records_written = write_ohlc_to_dynamodb(pair_key, params["interval"], records_to_persist)
 
         # Emit event for price updated
         events.put_events(
@@ -111,8 +112,8 @@ def lambda_handler(event, context):
                 "DetailType": "market-data-updated",
                 "Detail": json.dumps({
                     "pair": pair_key,
-                    "timeframe": f"{params["interval"]}m",
-                    "timestamp": int(ohlc[-1][0])  # timestamp of the latest candle
+                    "timeframe": f"{params['interval']}m",
+                    "timestamp": int(records_to_persist[-1][0])  # timestamp of the latest candle
                 })
             }]
         )

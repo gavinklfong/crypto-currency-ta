@@ -20,8 +20,8 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy" "lambda_dynamodb_write" {
-  name = "lambda-dynamodb-write-policy"
+resource "aws_iam_role_policy" "lambda_dynamodb_access" {
+  name = "lambda-dynamodb-access-policy"
   role = aws_iam_role.lambda_exec.id
 
   policy = jsonencode({
@@ -32,7 +32,8 @@ resource "aws_iam_role_policy" "lambda_dynamodb_write" {
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
         "dynamodb:GetItem",
-        "dynamodb:BatchWriteItem"
+        "dynamodb:BatchWriteItem",
+        "dynamodb:Query"
       ]
       Resource = [
         aws_dynamodb_table.market_data.arn,
@@ -41,6 +42,27 @@ resource "aws_iam_role_policy" "lambda_dynamodb_write" {
     }]
   })
 }
+
+resource "aws_iam_role_policy" "lambda_sqs_access" {
+  name = "lambda-sqs-access"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = aws_sqs_queue.ta_delay_queue.arn
+      }
+    ]
+  })
+}
+
 
 resource "aws_iam_role_policy" "lambda_eventbridge_put" {
   name = "lambda-eventbridge-put-policy"

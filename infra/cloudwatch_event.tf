@@ -58,28 +58,48 @@ resource "aws_sqs_queue" "ta_dlq" {
   name = "ta-calculation-dlq"
 }
 
-# Target the calculate-ta Lambda for market-data-updated events
-resource "aws_cloudwatch_event_target" "calculate_ta_target" {
-  rule      = aws_cloudwatch_event_rule.market_data_updated.name
-  target_id = "calculate-ta-lambda"
-  arn       = aws_lambda_function.lambda["calculate_ta"].arn
+resource "aws_sqs_queue" "ta_delay_queue" {
+  name                       = "ta-delay-queue"
+  delay_seconds              = 5 # delay execution by 5 seconds
+  visibility_timeout_seconds = 60
+}
 
-  retry_policy {
-    maximum_retry_attempts       = 10  # Retry up to 10 times
-    maximum_event_age_in_seconds = 900 # Give up and send to DLQ after 15 minutes
-  }
+resource "aws_sqs_queue_policy" "ta_delay_queue_policy" {
+  queue_url = aws_sqs_queue.ta_delay_queue.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect    = "Allow",
+        Principal = { Service = "events.amazonaws.com" },
+        Action    = "sqs:SendMessage",
+        Resource  = aws_sqs_queue.ta_delay_queue.arn,
+        Condition = {
+          ArnEquals = {
+            "aws:SourceArn" = aws_cloudwatch_event_rule.market_data_updated.arn
+          }
+        }
+      }
+    ]
+  })
+}
+
+
+resource "aws_cloudwatch_event_target" "market_data_to_sqs" {
+  rule      = aws_cloudwatch_event_rule.market_data_updated.name
+  target_id = "send-to-sqs"
+  arn       = aws_sqs_queue.ta_delay_queue.arn
 
   dead_letter_config {
     arn = aws_sqs_queue.ta_dlq.arn
   }
 }
 
-
-# Lambda permission to allow EventBridge to invoke calculate-ta
-resource "aws_lambda_permission" "allow_eventbridge_market_data_updated" {
-  statement_id  = "AllowExecutionFromEventBridgeMarketDataUpdated"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.lambda["calculate_ta"].function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.market_data_updated.arn
+resource "aws_lambda_event_source_mapping" "ta_sqs_trigger" {
+  event_source_arn = aws_sqs_queue.ta_delay_queue.arn
+  function_name    = aws_lambda_function.lambda["calculate_ta"].arn
+  batch_size       = 1
+  enabled          = true
 }
+

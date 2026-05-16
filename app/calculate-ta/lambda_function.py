@@ -1,10 +1,21 @@
 import boto3
 import decimal
 from datetime import datetime, timezone
+import logging
+import json
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 dynamodb = boto3.resource("dynamodb")
 TABLE_NAME = "crypto-currency-ta-market-data"
 table = dynamodb.Table(TABLE_NAME)
+
+def log_info(message, **kwargs):
+    logger.info(f"{message} | {kwargs}")
+
+def log_error(message, **kwargs):
+    logger.error(f"{message} | {kwargs}")
 
 def D(x):
     return decimal.Decimal(str(x)) if x is not None else None
@@ -119,15 +130,27 @@ def write_ta_to_dynamodb(pair, timeframe, timestamp, ta):
 # ============================================================
 
 def lambda_handler(event, context):
-    if "start_ts" in event and "end_ts" in event:
+    # SQS event
+    if "Records" in event:
+        record = event["Records"][0]
+        body = json.loads(record["body"])
+        
+        # EventBridge event is inside "detail"
+        event_data = body.get("detail", {})
+    else:
+        # Direct invocation (manual)
+        event_data = event
+
+    # Check if range calculation is requested
+    if "start_ts" in event_data and "end_ts" in event_data:
         return calculate_range(
-            event["pair"],
-            event["timeframe"],
-            event["start_ts"],
-            event["end_ts"]
+            event_data["pair"],
+            event_data["timeframe"],
+            event_data["start_ts"],
+            event_data["end_ts"]
         )
 
-    return calculate_single(event)
+    return calculate_single(event_data)
 
 # ============================================================
 # SINGLE-CANDLE MODE
@@ -136,45 +159,62 @@ def lambda_handler(event, context):
 def calculate_single(event):
     pair = event["pair"]
     timeframe = event["timeframe"]
-    timestamp = event["timestamp"]
+    timestamp = int(event["timestamp"])
 
     # ----------------------------------------------------
-    # 1. Fetch last 200 candles up to this timestamp
+    # 1. Fetch last 200 candles ONCE
     # ----------------------------------------------------
-    items = fetch_last_n_candles(pair, timeframe, timestamp, n=200)
+    window = fetch_last_n_candles(pair, timeframe, timestamp, n=200)
+    log_info("Fetched candles", count=len(window), pair=pair, timeframe=timeframe)
 
-    if not items:
+    if not window:
         raise RuntimeError(f"MARKET_DATA_NOT_AVAILABLE, ts:{timestamp}")
 
     # ----------------------------------------------------
-    # 2. Check if the target timestamp exists in the window
+    # 2. Extract the last 10 candles from this single window
     # ----------------------------------------------------
-    last_item = items[-1]  # chronological order
-    sk = last_item["SK"]
-    _, _, _, ts_str = sk.split("#")
-    last_ts = int(ts_str)
+    last_10 = window[-10:] if len(window) >= 10 else window
+    last_10_timestamps = [extract_timestamp_from_sk(i["SK"]) for i in last_10]
 
-    if last_ts != timestamp:
-        raise RuntimeError(f"TARGET_TIMESTAMP_NOT_AVAILABLE, ts:{timestamp}, last_available_ts:{last_ts}")
+    log_info("Processing last 10 candles", timestamps=last_10_timestamps)
 
     # ----------------------------------------------------
-    # 3. Compute TA
+    # 3. For each of the last 10 timestamps:
+    #    - Use the SAME window
+    #    - Slice the window up to that timestamp
+    #    - Compute TA
+    #    - Persist TA
     # ----------------------------------------------------
-    closes = [float(i["close"]) for i in items]
-    ta = compute_all_ta(closes)
+    results = []
 
-    # ----------------------------------------------------
-    # 4. Write TA into DynamoDB
-    # ----------------------------------------------------
-    write_ta_to_dynamodb(pair, timeframe, timestamp, ta)
+    # Pre-extract closes for performance
+    closes_all = [float(i["close"]) for i in window]
+
+    # Build a mapping: timestamp → index in window
+    index_by_ts = {extract_timestamp_from_sk(i["SK"]): idx for idx, i in enumerate(window)}
+
+    for ts in last_10_timestamps:
+        idx = index_by_ts[ts]
+
+        # Slice closes up to this candle
+        closes = closes_all[: idx + 1]
+
+        ta = compute_all_ta(closes)
+        write_ta_to_dynamodb(pair, timeframe, ts, ta)
+
+        log_info("TA written", pair=pair, timeframe=timeframe, timestamp=ts)
+
+        results.append({
+            "timestamp": ts,
+            "ta": ta
+        })
 
     return {
         "pair": pair,
         "timeframe": timeframe,
-        "timestamp": timestamp,
-        "ta_written": ta
+        "processed": len(results),
+        "details": results
     }
-
 
 # ============================================================
 # RANGE RE-CALCULATION MODE
