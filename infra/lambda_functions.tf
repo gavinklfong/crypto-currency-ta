@@ -42,28 +42,6 @@ resource "aws_iam_role_policy" "lambda_dynamodb_access" {
     }]
   })
 }
-
-resource "aws_iam_role_policy" "lambda_sqs_access" {
-  name = "lambda-sqs-access"
-  role = aws_iam_role.lambda_exec.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes"
-        ]
-        Resource = aws_sqs_queue.ta_delay_queue.arn
-      }
-    ]
-  })
-}
-
-
 resource "aws_iam_role_policy" "lambda_eventbridge_put" {
   name = "lambda-eventbridge-put-policy"
   role = aws_iam_role.lambda_exec.id

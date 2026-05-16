@@ -139,8 +139,11 @@ def lambda_handler(event, context):
         # EventBridge event is inside "detail"
         event_data = body.get("detail", {})
     else:
-        # Direct invocation (manual)
-        event_data = event
+        if "detail" in event:
+            event_data = event["detail"]    
+        else:
+            # Direct invocation (manual)
+            event_data = event
 
     # Check if range calculation is requested
     if "start_ts" in event_data and "end_ts" in event_data:

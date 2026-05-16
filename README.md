@@ -1,1 +1,1 @@
-# aws-serverless-function-automation
+# Crypto Currency Technical Analysis
