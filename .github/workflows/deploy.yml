@@ -1,4 +1,4 @@
-name: Deploy Hello World Lambda
+name: Deploy Crypto Currency TA
 
 on:
   push:
