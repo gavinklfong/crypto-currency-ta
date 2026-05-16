@@ -39,32 +39,47 @@ resource "aws_lambda_permission" "allow_eventbridge" {
 }
 
 ########################################################################
-# EventBridge Rule for Price Updated Events
+# EventBridge Rule for Market Data Updated Events
 ########################################################################
 
-# EventBridge rule to listen for price-updated events from fetch-market-data
-resource "aws_cloudwatch_event_rule" "price_updated" {
-  name        = "price-updated-rule"
-  description = "Route price-updated events from fetch-market-data to relevant targets"
+# EventBridge rule to listen for market-data-updated events from fetch-market-data
+resource "aws_cloudwatch_event_rule" "market_data_updated" {
+  name        = "market-data-updated-rule"
+  description = "Route market-data-updated events from fetch-market-data to relevant targets"
 
   event_pattern = jsonencode({
-    source      = ["price.fetcher"]
-    detail-type = ["price-updated"]
+    source      = ["market-data-fetcher"]
+    detail-type = ["market-data-updated"]
   })
 }
 
-# Target the calculate-ta Lambda for price-updated events
-resource "aws_cloudwatch_event_target" "calculate_ta_target" {
-  rule      = aws_cloudwatch_event_rule.price_updated.name
-  target_id = "calculate-ta-lambda"
-  arn       = aws_lambda_function.lambda["calculate_ta"].arn
+# DLQ for TA calculation failures
+resource "aws_sqs_queue" "ta_dlq" {
+  name = "ta-calculation-dlq"
 }
 
+# Target the calculate-ta Lambda for market-data-updated events
+resource "aws_cloudwatch_event_target" "calculate_ta_target" {
+  rule      = aws_cloudwatch_event_rule.market_data_updated.name
+  target_id = "calculate-ta-lambda"
+  arn       = aws_lambda_function.lambda["calculate_ta"].arn
+
+  retry_policy {
+    maximum_retry_attempts       = 10  # Retry up to 10 times
+    maximum_event_age_in_seconds = 900 # Give up and send to DLQ after 15 minutes
+  }
+
+  dead_letter_config {
+    arn = aws_sqs_queue.ta_dlq.arn
+  }
+}
+
+
 # Lambda permission to allow EventBridge to invoke calculate-ta
-resource "aws_lambda_permission" "allow_eventbridge_price_updated" {
-  statement_id  = "AllowExecutionFromEventBridgePriceUpdated"
+resource "aws_lambda_permission" "allow_eventbridge_market_data_updated" {
+  statement_id  = "AllowExecutionFromEventBridgeMarketDataUpdated"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.lambda["calculate_ta"].function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.price_updated.arn
+  source_arn    = aws_cloudwatch_event_rule.market_data_updated.arn
 }

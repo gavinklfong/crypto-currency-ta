@@ -107,8 +107,8 @@ def lambda_handler(event, context):
         # Emit event for price updated
         events.put_events(
             Entries=[{
-                "Source": "price.fetcher",
-                "DetailType": "price-updated",
+                "Source": "market-data-fetcher",
+                "DetailType": "market-data-updated",
                 "Detail": json.dumps({
                     "pair": pair_key,
                     "timeframe": f"{params["interval"]}m",
