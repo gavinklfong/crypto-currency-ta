@@ -108,7 +108,12 @@ class TestEventBridgeHandling(unittest.TestCase):
         try:
             result = lambda_handler(eventbridge_event, None)
             self.assertIn("pair", result)
-            self.assertIn("timestamp", result)
+            self.assertIn("processed", result)
+            self.assertIn("details", result)
+            # Verify details contains processed items with timestamps
+            if result["processed"] > 0:
+                self.assertIn("timestamp", result["details"][0])
+                self.assertIn("ta", result["details"][0])
         except (KeyError, TypeError, ValueError) as e:
             self.fail(f"Lambda failed to handle string timestamp: {e}")
     
@@ -142,10 +147,21 @@ class TestEventBridgeHandling(unittest.TestCase):
         # Verify result contains expected fields
         self.assertEqual(result["pair"], "XXBTZUSD")
         self.assertEqual(result["timeframe"], "1m")
-        self.assertIn("ta_written", result)
-        self.assertIn("rsi14", result["ta_written"])
-        self.assertIn("macd", result["ta_written"])
-        self.assertIn("ema20", result["ta_written"])
+        self.assertIn("processed", result)
+        self.assertIn("details", result)
+        
+        # Verify details array structure
+        self.assertGreater(result["processed"], 0)
+        self.assertEqual(len(result["details"]), result["processed"])
+        
+        # Verify first detail item has TA data
+        first_detail = result["details"][0]
+        self.assertIn("timestamp", first_detail)
+        self.assertIn("ta", first_detail)
+        ta = first_detail["ta"]
+        self.assertIn("rsi14", ta)
+        self.assertIn("macd", ta)
+        self.assertIn("ema20", ta)
 
 
 if __name__ == "__main__":
