@@ -41,7 +41,7 @@ variable "lambdas" {
       function_name = "fetch-market-data"
       zip_path      = "../.package/deployment-fetch-market-data.zip"
       route_key     = "GET /trigger-fetch-market-data"
-      schedule      = "rate(5 minutes)"
+      schedule      = "rate(1 minute)"
     }
     calculate_ta = {
       function_name = "calculate-ta"

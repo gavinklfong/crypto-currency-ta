@@ -88,7 +88,7 @@ def fetch_last_n_candles(pair, timeframe, timestamp, n=200):
         },
         ScanIndexForward=False,
         Limit=n,
-        ConsistentRead=True
+        ConsistentRead=False
     )
 
     return list(reversed(resp["Items"]))
