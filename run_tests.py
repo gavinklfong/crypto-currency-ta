@@ -4,12 +4,16 @@ Discover and run tests for all Lambda functions.
 Exits with status 0 if all tests pass, 1 if any fail.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / "app"
+
+# Set AWS region for boto3 (required for tests)
+os.environ["AWS_DEFAULT_REGION"] = "us-east-2"
 
 
 def find_lambda_functions():

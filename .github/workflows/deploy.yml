@@ -19,6 +19,8 @@ jobs:
           python-version: "3.12"
 
       - name: Run all Lambda function tests
+        env:
+          AWS_DEFAULT_REGION: us-east-2
         run: python run_tests.py
 
   deploy:
