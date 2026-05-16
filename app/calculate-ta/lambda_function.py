@@ -171,7 +171,7 @@ def calculate_single(event):
         raise RuntimeError(f"MARKET_DATA_NOT_AVAILABLE, ts:{timestamp}")
 
     # ----------------------------------------------------
-    # 2. Extract the last 10 candles from this single window
+    # 2. Extract the last 10 candles
     # ----------------------------------------------------
     last_10 = window[-10:] if len(window) >= 10 else window
     last_10_timestamps = [extract_timestamp_from_sk(i["SK"]) for i in last_10]
@@ -179,41 +179,62 @@ def calculate_single(event):
     log_info("Processing last 10 candles", timestamps=last_10_timestamps)
 
     # ----------------------------------------------------
-    # 3. For each of the last 10 timestamps:
-    #    - Use the SAME window
-    #    - Slice the window up to that timestamp
-    #    - Compute TA
-    #    - Persist TA
+    # 3. Precompute closes and index mapping
     # ----------------------------------------------------
-    results = []
-
-    # Pre-extract closes for performance
     closes_all = [float(i["close"]) for i in window]
-
-    # Build a mapping: timestamp → index in window
     index_by_ts = {extract_timestamp_from_sk(i["SK"]): idx for idx, i in enumerate(window)}
+
+    # ----------------------------------------------------
+    # 4. Build batch write payload
+    # ----------------------------------------------------
+    batch_items = []
 
     for ts in last_10_timestamps:
         idx = index_by_ts[ts]
-
-        # Slice closes up to this candle
         closes = closes_all[: idx + 1]
 
         ta = compute_all_ta(closes)
-        write_ta_to_dynamodb(pair, timeframe, ts, ta)
 
-        log_info("TA written", pair=pair, timeframe=timeframe, timestamp=ts)
+        # Build full item for PutRequest
+        pk = f"PAIR#{pair}"
+        sk = f"TF#{timeframe}#TS#{ts}"
 
-        results.append({
-            "timestamp": ts,
-            "ta": ta
+        # Find the original candle item
+        original_item = next(i for i in window if extract_timestamp_from_sk(i["SK"]) == ts)
+
+        # Merge TA into the item
+        new_item = dict(original_item)
+        new_item["ta"] = ta
+
+        # Convert Python types to DynamoDB JSON types
+        marshalled = boto3.dynamodb.types.TypeSerializer().serialize(new_item)["M"]
+
+        batch_items.append({
+            "PutRequest": {
+                "Item": marshalled
+            }
         })
+
+    # ----------------------------------------------------
+    # 5. Execute batch write (single operation)
+    # ----------------------------------------------------
+    client = boto3.client("dynamodb")
+
+    request = {TABLE_NAME: batch_items}
+    while True:
+        resp = client.batch_write_item(RequestItems=request)
+        unprocessed = resp.get("UnprocessedItems", {})
+        if not unprocessed:
+            break
+        request = unprocessed  # retry
+
+    log_info("Batch TA write completed", count=len(batch_items))
 
     return {
         "pair": pair,
         "timeframe": timeframe,
-        "processed": len(results),
-        "details": results
+        "processed": len(batch_items),
+        "timestamps": last_10_timestamps
     }
 
 # ============================================================
@@ -223,6 +244,9 @@ def calculate_single(event):
 def calculate_range(pair, timeframe, start_ts, end_ts):
     pk = f"PAIR#{pair}"
 
+    # ----------------------------------------------------
+    # 1. Fetch all candles in the range
+    # ----------------------------------------------------
     resp = table.query(
         KeyConditionExpression="PK = :pk AND SK BETWEEN :sk_start AND :sk_end",
         ExpressionAttributeValues={
@@ -231,23 +255,80 @@ def calculate_range(pair, timeframe, start_ts, end_ts):
             ":sk_end": f"TF#{timeframe}#TS#{end_ts}"
         },
         ScanIndexForward=True,
-        ConsistentRead=True
+        ConsistentRead=False
     )
 
     candles = resp["Items"]
+    if not candles:
+        return {
+            "pair": pair,
+            "timeframe": timeframe,
+            "start_ts": start_ts,
+            "end_ts": end_ts,
+            "status": "no candles found"
+        }
 
-    for item in candles:
-        ts = extract_timestamp_from_sk(item["SK"])
-        window = fetch_last_n_candles(pair, timeframe, ts, n=200)
-        closes = [float(c["close"]) for c in window]
+    # Extract timestamps
+    timestamps = [extract_timestamp_from_sk(i["SK"]) for i in candles]
+
+    # ----------------------------------------------------
+    # 2. Fetch a single large window up to end_ts
+    # ----------------------------------------------------
+    window = fetch_last_n_candles(pair, timeframe, end_ts, n=2000)
+    closes_all = [float(i["close"]) for i in window]
+
+    # Map timestamp → index in window
+    index_by_ts = {extract_timestamp_from_sk(i["SK"]): idx for idx, i in enumerate(window)}
+
+    # ----------------------------------------------------
+    # 3. Build batch write items
+    # ----------------------------------------------------
+    serializer = boto3.dynamodb.types.TypeSerializer()
+    batch_items = []
+
+    for candle in candles:
+        ts = extract_timestamp_from_sk(candle["SK"])
+        if ts not in index_by_ts:
+            continue
+
+        idx = index_by_ts[ts]
+        closes = closes_all[: idx + 1]
 
         ta = compute_all_ta(closes)
-        write_ta_to_dynamodb(pair, timeframe, ts, ta)
+
+        # Merge TA into item
+        new_item = dict(candle)
+        new_item["ta"] = ta
+
+        marshalled = serializer.serialize(new_item)["M"]
+
+        batch_items.append({
+            "PutRequest": {
+                "Item": marshalled
+            }
+        })
+
+    # ----------------------------------------------------
+    # 4. Batch write in chunks of 25
+    # ----------------------------------------------------
+    client = boto3.client("dynamodb")
+
+    for i in range(0, len(batch_items), 25):
+        chunk = batch_items[i:i+25]
+        request = {TABLE_NAME: chunk}
+
+        while True:
+            resp = client.batch_write_item(RequestItems=request)
+            unprocessed = resp.get("UnprocessedItems", {})
+            if not unprocessed:
+                break
+            request = unprocessed
 
     return {
         "pair": pair,
         "timeframe": timeframe,
         "start_ts": start_ts,
         "end_ts": end_ts,
-        "status": "range recalculated"
+        "processed": len(batch_items),
+        "status": "range recalculated (batch mode)"
     }
