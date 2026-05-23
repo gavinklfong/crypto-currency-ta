@@ -4,6 +4,8 @@ import boto3
 import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Tuple
+from decimal import Decimal
+
 import logging
 
 logger = logging.getLogger()
@@ -14,7 +16,7 @@ TABLE_NAME = "crypto-currency-ta-market-data"
 table = dynamodb.Table(TABLE_NAME)
 
 # Default symbol if none is provided
-DEFAULT_SYMBOLS = ["XBTUSD"]  # Bitcoin/USD
+DEFAULT_SYMBOL = "XBTUSD"  # Bitcoin/USD
 
 # Timeframe configurations (in seconds)
 TIMEFRAMES = {
@@ -34,6 +36,16 @@ def log_info(message, **kwargs):
 
 def log_error(message, **kwargs):
     logger.error(f"{message} | {json.dumps(kwargs)}")
+
+
+def to_decimal(obj):
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    if isinstance(obj, dict):
+        return {k: to_decimal(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [to_decimal(v) for v in obj]
+    return obj
 
 def get_candle_timestamp(timestamp: int, timeframe_seconds: int) -> int:
     """Get the bucket timestamp for a given timestamp and timeframe."""
@@ -122,6 +134,7 @@ def write_aggregated_candle(pair: str, timeframe: str, timestamp: int, candle_da
     sk = f"TF#{timeframe}#TS#{timestamp}"
 
     try:
+        candle_data = to_decimal(candle_data)
         table.put_item(
             Item={
                 "PK": pk,
@@ -143,7 +156,7 @@ def write_aggregated_candle(pair: str, timeframe: str, timestamp: int, candle_da
                 "ha_close": candle_data.get("ha_close"),
                 "created_at": datetime.now(timezone.utc).isoformat(),
             },
-            ConditionExpression="attribute_not_exists(PK)"
+            ConditionExpression="attribute_not_exists(SK)"
         )
         log_info(
             "Aggregated candle inserted",
@@ -176,6 +189,14 @@ def process_pair_timeframe(pair: str, timeframe: str, current_time: int):
     # Fetch 1-minute candles
     candles_1m = fetch_1m_candles(pair, start_ts, end_ts)
     
+    log_info(
+        "Fetched 1-minute candles",
+        pair=pair,
+        timeframe=timeframe,
+        start_ts=start_ts,
+        end_ts=end_ts,
+        count=len(candles_1m))
+
     if not candles_1m:
         log_info(
             "No 1-minute candles found",
@@ -204,6 +225,13 @@ def process_pair_timeframe(pair: str, timeframe: str, current_time: int):
     # Write aggregated candles
     processed_count = 0
     
+    log_info(
+        "Processing aggregated candles",
+        pair=pair,
+        timeframe=timeframe,
+        buckets_count=len(buckets),
+    )
+
     for bucket_ts in sorted(buckets.keys()):
         candle_group = buckets[bucket_ts]
         
@@ -214,6 +242,13 @@ def process_pair_timeframe(pair: str, timeframe: str, current_time: int):
         # For the current bucket, we write it anyway
         aggregated = aggregate_candles(candle_group)
         
+        log_info(
+            "Aggregating candle",
+            pair=pair,
+            timeframe=timeframe,
+            bucket_ts=bucket_ts,
+            candles_in_bucket=len(candle_group))
+
         if aggregated:
             write_aggregated_candle(pair, timeframe, bucket_ts, aggregated)
             processed_count += 1
@@ -240,52 +275,41 @@ def lambda_handler(event, context):
         if "detail" in event:
             # EventBridge format - require symbols in detail
             event_data = event["detail"]
-            symbols = event_data.get("symbols")
+            symbol = event_data.get("symbol")
         else:
             # Direct format - try to get symbols, fall back to defaults
             event_data = event
-            symbols = event_data.get("symbols", DEFAULT_SYMBOLS)
+            symbol = event_data.get("symbol", DEFAULT_SYMBOL)
         
-        if not symbols:
-            # No symbols specified
-            log_error("No symbols specified in event", event=event_data)
-            return {
-                "status": "error",
-                "message": "No symbols specified"
-            }
-        
+        if not symbol:
+            raise ValueError("No symbol provided in event")
+
         current_time = int(datetime.now(timezone.utc).timestamp())
         
         results = {}
         
-        for symbol in symbols:
-            symbol_results = {}
+        # Process each timeframe for the current symbol
+        for timeframe in TIMEFRAMES.keys():
+            if timeframe == "1m":
+                # Skip 1-minute, it's the source data
+                continue
             
-            # Process each timeframe for the current symbol
-            for timeframe in TIMEFRAMES.keys():
-                if timeframe == "1m":
-                    # Skip 1-minute, it's the source data
-                    continue
+            try:
+                processed = process_pair_timeframe(symbol, timeframe, current_time)
+                results[timeframe] = processed
                 
-                try:
-                    processed = process_pair_timeframe(symbol, timeframe, current_time)
-                    symbol_results[timeframe] = processed
-                    
-                except Exception as e:
-                    log_error(
-                        "Error processing timeframe",
-                        symbol=symbol,
-                        timeframe=timeframe,
-                        error=str(e)
-                    )
-                    symbol_results[timeframe] = 0
-            
-            results[symbol] = symbol_results
+            except Exception as e:
+                log_error(
+                    "Error processing timeframe",
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    error=str(e)
+                )
         
         return {
             "status": "success",
             "current_time": current_time,
-            "symbols_processed": len(symbols),
+            "symbol_processed": symbol,
             "results": results
         }
     

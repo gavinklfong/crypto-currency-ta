@@ -377,94 +377,61 @@ class TestLambdaHandler:
     def test_lambda_handler_with_eventbridge_format(self, mock_process):
         """Test lambda_handler with EventBridge detail wrapper."""
         mock_process.return_value = 2  # Simulate 2 candles processed per timeframe
-        
+
         event = {
             "detail": {
-                "symbols": ["BTCUSD", "ETHUSD"]
+                "symbol": "BTCUSD"
             }
         }
-        
+
         result = lambda_handler(event, None)
-        
+
         assert result["status"] == "success"
-        assert result["symbols_processed"] == 2
-        assert "BTCUSD" in result["results"]
-        assert "ETHUSD" in result["results"]
+        assert result["symbol_processed"] == "BTCUSD"
+        assert isinstance(result["results"], dict)
         mock_process.assert_called()
 
     @patch("lambda_function.process_pair_timeframe")
     def test_lambda_handler_with_direct_event_format(self, mock_process):
-        """Test lambda_handler with direct event (no detail wrapper)."""
         mock_process.return_value = 1
-        
-        event = {
-            "symbols": ["BTCUSD"]
-        }
-        
+
+        event = {"symbol": "BTCUSD"}
+
         result = lambda_handler(event, None)
-        
+
         assert result["status"] == "success"
-        assert result["symbols_processed"] == 1
-        assert "BTCUSD" in result["results"]
+        assert result["symbol_processed"] == "BTCUSD"
+        assert "5m" in result["results"]
 
     @patch("lambda_function.process_pair_timeframe")
     def test_lambda_handler_single_pair_multiple_timeframes(self, mock_process):
-        """Test lambda_handler processes single symbol across all timeframes."""
         mock_process.return_value = 1
-        
-        event = {
-            "detail": {
-                "symbols": ["BTCUSD"]
-            }
-        }
-        
+
+        event = {"detail": {"symbol": "BTCUSD"}}
+
         result = lambda_handler(event, None)
-        
-        # Should be called for each timeframe (except 1m which is skipped)
-        expected_calls = len([tf for tf in TIMEFRAMES.keys() if tf != "1m"])
+
+        expected_calls = len([tf for tf in TIMEFRAMES if tf != "1m"])
         assert mock_process.call_count == expected_calls
-        assert result["results"]["BTCUSD"]["5m"] == 1
+        assert result["results"]["5m"] == 1
 
     @patch("lambda_function.process_pair_timeframe")
     def test_lambda_handler_multiple_pairs_multiple_timeframes(self, mock_process):
-        """Test lambda_handler processes multiple symbols across all timeframes."""
         mock_process.return_value = 2
-        
-        event = {
-            "detail": {
-                "symbols": ["BTCUSD", "ETHUSD", "XRPUSD"]
-            }
-        }
-        
+
+        event = {"detail": {"symbol": "BTCUSD"}}
+
         result = lambda_handler(event, None)
-        
+
         assert result["status"] == "success"
-        assert result["symbols_processed"] == 3
-        assert len(result["results"]) == 3
-        
-        # Verify all symbols are in results
-        for symbol in ["BTCUSD", "ETHUSD", "XRPUSD"]:
-            assert symbol in result["results"]
-            # Each symbol should have results for non-1m timeframes
-            assert "5m" in result["results"][symbol]
-            assert "1h" in result["results"][symbol]
+        assert result["symbol_processed"] == "BTCUSD"
+        assert "5m" in result["results"]
 
-    def test_lambda_handler_no_pairs_specified(self):
-        """Test lambda_handler error when no symbols specified."""
-        event = {
-            "detail": {}
-        }
-        
-        result = lambda_handler(event, None)
-        
-        assert result["status"] == "error"
-        assert "No symbols specified" in result["message"]
-
-    def test_lambda_handler_empty_pairs_list(self):
+    def test_lambda_handler_empty_pair(self):
         """Test lambda_handler error when symbols list is empty."""
         event = {
             "detail": {
-                "symbols": []
+                "symbol": ""
             }
         }
         
@@ -473,102 +440,60 @@ class TestLambdaHandler:
         assert result["status"] == "error"
 
     @patch("lambda_function.process_pair_timeframe")
-    def test_lambda_handler_per_pair_error_handling(self, mock_process):
-        """Test lambda_handler handles errors per symbol gracefully."""
-        # First symbol succeeds, second symbol fails
-        side_effects = [1, Exception("DynamoDB error"), 0]
-        mock_process.side_effect = side_effects
-        
-        event = {
-            "detail": {
-                "symbols": ["BTCUSD", "ETHUSD"]
-            }
-        }
-        
+    def test_lambda_handler_error_handling(self, mock_process):
+        mock_process.side_effect = Exception("DynamoDB error")
+
+        event = {"detail": {"symbol": "BTCUSD"}}
+
         result = lambda_handler(event, None)
-        
-        # Handler should return success even if some symbols fail
+
         assert result["status"] == "success"
-        assert result["symbols_processed"] == 2
-        # Both symbols should be in results
-        assert "BTCUSD" in result["results"]
-        assert "ETHUSD" in result["results"]
+        assert result["results"] == {}
 
     @patch("lambda_function.process_pair_timeframe")
     def test_lambda_handler_returns_aggregation_counts(self, mock_process):
-        """Test lambda_handler returns aggregation counts per timeframe."""
-        mock_process.return_value = 5  # 5 candles aggregated per timeframe
-        
-        event = {
-            "detail": {
-                "symbols": ["BTCUSD"]
-            }
-        }
-        
+        mock_process.return_value = 5
+
+        event = {"detail": {"symbol": "BTCUSD"}}
+
         result = lambda_handler(event, None)
-        
-        # Verify structure
-        assert "results" in result
-        assert "BTCUSD" in result["results"]
-        assert "5m" in result["results"]["BTCUSD"]
-        assert result["results"]["BTCUSD"]["5m"] == 5
+
+        assert result["results"]["5m"] == 5
 
     @patch("lambda_function.process_pair_timeframe")
     def test_lambda_handler_timestamp_in_response(self, mock_process):
-        """Test lambda_handler includes current timestamp in response."""
         mock_process.return_value = 1
-        
-        event = {
-            "detail": {
-                "symbols": ["BTCUSD"]
-            }
-        }
-        
-        before_call = int(datetime.now(timezone.utc).timestamp())
+
+        event = {"detail": {"symbol": "BTCUSD"}}
+
+        before = int(datetime.now(timezone.utc).timestamp())
         result = lambda_handler(event, None)
-        after_call = int(datetime.now(timezone.utc).timestamp())
-        
-        assert "current_time" in result
-        assert before_call <= result["current_time"] <= after_call + 1
+        after = int(datetime.now(timezone.utc).timestamp())
+
+        assert before <= result["current_time"] <= after + 1
 
     @patch("lambda_function.process_pair_timeframe")
     def test_lambda_handler_all_timeframes_processed(self, mock_process):
-        """Test that all timeframes are processed for each symbol."""
         mock_process.return_value = 1
-        
-        event = {
-            "detail": {
-                "symbols": ["BTCUSD"]
-            }
-        }
-        
+
+        event = {"detail": {"symbol": "BTCUSD"}}
+
         result = lambda_handler(event, None)
-        
-        # Get all timeframes except 1m
-        expected_timeframes = {tf for tf in TIMEFRAMES.keys() if tf != "1m"}
-        actual_timeframes = set(result["results"]["BTCUSD"].keys())
-        
-        assert expected_timeframes == actual_timeframes
+
+        expected = {tf for tf in TIMEFRAMES if tf != "1m"}
+        assert set(result["results"].keys()) == expected
 
     @patch("lambda_function.process_pair_timeframe")
     def test_lambda_handler_processes_correct_timeframes(self, mock_process):
-        """Test that handler calls process_pair_timeframe with correct timeframes."""
         mock_process.return_value = 1
-        
-        event = {
-            "detail": {
-                "symbols": ["BTCUSD"]
-            }
-        }
-        
+
+        event = {"detail": {"symbol": "BTCUSD"}}
+
         lambda_handler(event, None)
-        
-        # Extract all timeframe arguments from mock calls
-        called_timeframes = {call[0][1] for call in mock_process.call_args_list}
-        
-        # Should include 5m, 15m, 30m, 1h, 4h, 1d, 1w, 1M (not 1m)
+
+        called = {call[0][1] for call in mock_process.call_args_list}
         expected = {"5m", "15m", "30m", "1h", "4h", "1d", "1w", "1M"}
-        assert called_timeframes == expected
+        assert called == expected
 
     @patch("lambda_function.process_pair_timeframe")
     def test_lambda_handler_with_zero_processed_candles(self, mock_process):
@@ -577,111 +502,50 @@ class TestLambdaHandler:
         
         event = {
             "detail": {
-                "symbols": ["BTCUSD"]
+                "symbol": "BTCUSD"
             }
         }
         
         result = lambda_handler(event, None)
         
         assert result["status"] == "success"
-        assert result["results"]["BTCUSD"]["5m"] == 0
-        assert result["results"]["BTCUSD"]["1h"] == 0
+        assert result["results"]["5m"] == 0
+        assert result["results"]["1h"] == 0
 
     @patch("lambda_function.process_pair_timeframe")
     def test_lambda_handler_large_number_of_pairs(self, mock_process):
-        """Test lambda_handler with many symbols."""
         mock_process.return_value = 3
-        
-        symbols = [f"PAIR{i}" for i in range(10)]
-        event = {
-            "detail": {
-                "symbols": symbols
-            }
-        }
-        
-        result = lambda_handler(event, None)
-        
-        assert result["status"] == "success"
-        assert result["symbols_processed"] == 10
-        assert len(result["results"]) == 10
-        
-        # Verify all symbols processed
-        for symbol in symbols:
-            assert symbol in result["results"]
 
-    def test_lambda_handler_exception_handling(self):
-        """Test lambda_handler handles exceptions from process_pair_timeframe gracefully."""
-        event = {
-            "detail": {
-                "symbols": ["BTCUSD"]
-            }
-        }
-        
-        with patch("lambda_function.process_pair_timeframe", side_effect=Exception("Unexpected error")):
-            result = lambda_handler(event, None)
-        
-        # Handler should catch exceptions per symbol and return success with 0 processed
+        event = {"detail": {"symbol": "PAIR0"}}
+
+        result = lambda_handler(event, None)
+
         assert result["status"] == "success"
-        assert result["results"]["BTCUSD"]["5m"] == 0
+        assert result["symbol_processed"] == "PAIR0"
 
     @patch("lambda_function.process_pair_timeframe")
     def test_lambda_handler_respects_event_data_structure(self, mock_process):
-        """Test lambda_handler correctly extracts symbols from nested event structure."""
         mock_process.return_value = 1
-        
-        # EventBridge wraps the actual event in "detail"
+
         event = {
-            "version": "0",
-            "id": "12345",
-            "detail-type": "EventBridge Event",
-            "source": "aws.events",
-            "account": "123456789012",
-            "time": "2026-05-23T12:00:00Z",
-            "region": "us-east-2",
-            "resources": [],
             "detail": {
-                "symbols": ["BTCUSD", "ETHUSD"]
+                "symbol": "BTCUSD"
             }
         }
-        
+
         result = lambda_handler(event, None)
-        
-        # Should extract symbols from detail correctly
-        assert result["status"] == "success"
-        assert result["symbols_processed"] == 2
+
+        assert result["symbol_processed"] == "BTCUSD"
 
     @patch("lambda_function.process_pair_timeframe")
     def test_lambda_handler_aggregation_count_accumulation(self, mock_process):
-        """Test that aggregation counts are properly tracked."""
-        # Different counts for different timeframes
-        mock_process.side_effect = [1, 2, 3, 4, 5, 6, 7, 8]  # 8 timeframes (not 1m)
-        
-        event = {
-            "detail": {
-                "symbols": ["BTCUSD"]
-            }
-        }
-        
-        result = lambda_handler(event, None)
-        
-        # Verify counts match mock side effects
-        assert result["results"]["BTCUSD"]["5m"] == 1
-        assert result["results"]["BTCUSD"]["15m"] == 2
-        assert result["results"]["BTCUSD"]["30m"] == 3
-        assert result["results"]["BTCUSD"]["1h"] == 4
+        mock_process.side_effect = [1,2,3,4,5,6,7,8]
 
-    @patch("lambda_function.process_pair_timeframe")
-    def test_lambda_handler_default_pairs(self, mock_process):
-        """Test lambda_handler uses default pairs when none specified."""
-        from lambda_function import DEFAULT_SYMBOLS
-        
-        mock_process.return_value = 1
-        
-        # Empty event should use DEFAULT_SYMBOLS
-        event = {}
-        
+        event = {"detail": {"symbol": "BTCUSD"}}
+
         result = lambda_handler(event, None)
-        
-        assert result["status"] == "success"
-        assert result["symbols_processed"] == len(DEFAULT_SYMBOLS)
+
+        assert result["results"]["5m"] == 1
+        assert result["results"]["15m"] == 2
+        assert result["results"]["30m"] == 3
 

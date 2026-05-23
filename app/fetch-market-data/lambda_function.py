@@ -3,10 +3,12 @@ import requests
 import boto3
 from datetime import datetime
 from itertools import islice
+import logging
 
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
-# Default symbol if none is provided
-DEFAULT_SYMBOLS = ["XBTUSD"]  # Bitcoin/USD
+DEFAULT_SYMBOL = "XBTUSD"  # Bitcoin/USD
 CANDLE_INTERVAL = 1  # 1-minute candles (triggered every 1 minute)
 KRAKEN_OHLC_URL = "https://api.kraken.com/0/public/OHLC"
 DYNAMODB_TABLE_NAME = "crypto-currency-ta-market-data"
@@ -14,6 +16,12 @@ DYNAMODB_TABLE_NAME = "crypto-currency-ta-market-data"
 events = boto3.client("events")
 dynamodb_client = boto3.client("dynamodb", region_name="us-east-2")
 
+
+def log_info(message, **kwargs):
+    logger.info(f"{message} | {json.dumps(kwargs)}")
+
+def log_error(message, **kwargs):
+    logger.error(f"{message} | {json.dumps(kwargs)}")
 
 def chunked(iterable, size=25):
     """Yield successive chunks of size N from iterable."""
@@ -60,7 +68,7 @@ def write_ohlc_to_dynamodb(pair, timeframe_minutes, ohlc_data):
             dynamodb_client.put_item(
                 TableName=DYNAMODB_TABLE_NAME,
                 Item=item,
-                ConditionExpression="attribute_not_exists(PK)"
+                ConditionExpression="attribute_not_exists(SK)"
             )
             written += 1
 
@@ -72,94 +80,72 @@ def write_ohlc_to_dynamodb(pair, timeframe_minutes, ohlc_data):
 
 
 def lambda_handler(event, context):
-    # Extract symbols from EventBridge event
+
+    log_info("Lambda triggered", event=json.dumps(event))
+    
+    # Extract symbols from event (either from detail or directly)
     if "detail" in event:
+        # EventBridge format - require symbols in detail
         event_data = event["detail"]
+        symbol = event_data.get("symbol")
     else:
+        # Direct format - try to get symbols, fall back to defaults
         event_data = event
-    
-    symbols = event_data.get("symbols", DEFAULT_SYMBOLS)
-    
-    if not symbols:
-        return {
-            "statusCode": 400,
-            "body": json.dumps({"error": "No symbols specified in event"}),
-        }
-    
-    results = []
-    total_records_written = 0
-    event_entries = []
-    
+        symbol = event_data.get("symbol", DEFAULT_SYMBOL)
+
+
+    params = {
+        "pair": symbol,
+        "interval": CANDLE_INTERVAL
+    }
+
     try:
-        # Process each symbol
-        for symbol in symbols:
-            params = {
-                "pair": symbol,
-                "interval": CANDLE_INTERVAL
+        response = requests.get(KRAKEN_OHLC_URL, params=params, timeout=10)
+        data = response.json()
+
+        if data.get("error"):
+            return {
+                "statusCode": 500,
+                "body": json.dumps({"error": data["error"]}),
             }
-            
-            try:
-                response = requests.get(KRAKEN_OHLC_URL, params=params, timeout=10)
-                data = response.json()
-                
-                if data.get("error"):
-                    results.append({
-                        "symbol": symbol,
-                        "status": "error",
-                        "error": data["error"],
-                        "records_written": 0
-                    })
-                    continue
-                
-                # Kraken returns a dict with the pair name as the key
-                pair_key = list(data["result"].keys())[0]
-                ohlc = data["result"][pair_key]
-                records_to_persist = ohlc[-10:]
-                
-                # Write the most recent 10 OHLC data points to DynamoDB
-                records_written = write_ohlc_to_dynamodb(pair_key, params["interval"], records_to_persist)
-                total_records_written += records_written
-                
-                results.append({
-                    "symbol": pair_key,
-                    "status": "success",
-                    "count": len(ohlc),
-                    "records_written": records_written
+
+        # Kraken returns a dict with the pair name as the key
+        pair_key = list(data["result"].keys())[0]
+        ohlc = data["result"][pair_key]
+        records_to_persist = ohlc[-10:]
+
+
+        # Write the most recent 10 OHLC data points to DynamoDB
+        records_written = write_ohlc_to_dynamodb(pair_key, params["interval"], records_to_persist)
+        latest_candle_ts = int(records_to_persist[-1][0]) if records_to_persist else None
+
+        # Emit event for price updated
+        events.put_events(
+            Entries=[{
+                "Source": "market-data-fetcher",
+                "DetailType": "market-data-updated",
+                "Detail": json.dumps({
+                    "pair": pair_key,
+                    "timeframe": f"{params['interval']}m",
+                    "timestamp": latest_candle_ts  # timestamp of the latest candle
                 })
-                
-                # Queue event for price updated (only if data was written)
-                if records_written > 0:
-                    event_entries.append({
-                        "Source": "market-data-fetcher",
-                        "DetailType": "market-data-updated",
-                        "Detail": json.dumps({
-                            "pair": pair_key,
-                            "timeframe": f"{params['interval']}m",
-                            "timestamp": int(records_to_persist[-1][0])  # timestamp of the latest candle
-                        })
-                    })
-            
-            except Exception as symbol_error:
-                results.append({
-                    "symbol": symbol,
-                    "status": "error",
-                    "error": str(symbol_error),
-                    "records_written": 0
-                })
-        
-        # Emit all events at once
-        if event_entries:
-            events.put_events(Entries=event_entries)
-        
+            }]
+        )
+
+        log_info("Records written to DynamoDB", pair=pair_key, timestamp=latest_candle_ts, count=records_written)
+
         return {
             "statusCode": 200,
-            "body": json.dumps({
-                "symbols_processed": len(symbols),
-                "total_records_written": total_records_written,
-                "results": results,
-            }),
+            "body": json.dumps(
+                {
+                    "pair": pair_key,
+                    "count": len(ohlc),
+                    "records_written_to_dynamodb": records_written,
+                    "ohlc": records_to_persist,
+                }
+            ),
         }
-    
+
     except Exception as e:
         return {
             "statusCode": 500,
