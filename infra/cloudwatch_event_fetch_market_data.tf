@@ -25,6 +25,9 @@ resource "aws_cloudwatch_event_target" "lambda_schedule_target" {
   rule      = aws_cloudwatch_event_rule.lambda_schedule[each.key].name
   target_id = "lambda-${each.key}"
   arn       = aws_lambda_function.lambda[each.key].arn
+
+  # Pass event data to Lambda (e.g., cryptocurrency symbols)
+  input = try(each.value.event_input, null) != null ? each.value.event_input : null
 }
 
 # Lambda Permissions for CloudWatch Events

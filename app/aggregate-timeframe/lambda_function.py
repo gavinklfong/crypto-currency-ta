@@ -13,6 +13,9 @@ dynamodb = boto3.resource("dynamodb")
 TABLE_NAME = "crypto-currency-ta-market-data"
 table = dynamodb.Table(TABLE_NAME)
 
+# Default symbol if none is provided
+DEFAULT_SYMBOLS = ["XBTUSD"]  # Bitcoin/USD
+
 # Timeframe configurations (in seconds)
 TIMEFRAMES = {
     "1m": 60,
@@ -233,55 +236,56 @@ def lambda_handler(event, context):
     try:
         log_info("Lambda triggered", event=json.dumps(event))
         
-        # Extract pairs from event (either from detail or directly)
+        # Extract symbols from event (either from detail or directly)
         if "detail" in event:
+            # EventBridge format - require symbols in detail
             event_data = event["detail"]
+            symbols = event_data.get("symbols")
         else:
+            # Direct format - try to get symbols, fall back to defaults
             event_data = event
+            symbols = event_data.get("symbols", DEFAULT_SYMBOLS)
         
-        # Get pairs to process (can be passed in event or default to known pairs)
-        pairs = event_data.get("pairs", [])
-        
-        if not pairs:
-            # Fallback: process a default pair or scan available pairs
-            log_error("No pairs specified in event", event=event_data)
+        if not symbols:
+            # No symbols specified
+            log_error("No symbols specified in event", event=event_data)
             return {
                 "status": "error",
-                "message": "No pairs specified"
+                "message": "No symbols specified"
             }
         
         current_time = int(datetime.now(timezone.utc).timestamp())
         
         results = {}
         
-        for pair in pairs:
-            pair_results = {}
+        for symbol in symbols:
+            symbol_results = {}
             
-            # Process each timeframe for the current pair
+            # Process each timeframe for the current symbol
             for timeframe in TIMEFRAMES.keys():
                 if timeframe == "1m":
                     # Skip 1-minute, it's the source data
                     continue
                 
                 try:
-                    processed = process_pair_timeframe(pair, timeframe, current_time)
-                    pair_results[timeframe] = processed
+                    processed = process_pair_timeframe(symbol, timeframe, current_time)
+                    symbol_results[timeframe] = processed
                     
                 except Exception as e:
                     log_error(
                         "Error processing timeframe",
-                        pair=pair,
+                        symbol=symbol,
                         timeframe=timeframe,
                         error=str(e)
                     )
-                    pair_results[timeframe] = 0
+                    symbol_results[timeframe] = 0
             
-            results[pair] = pair_results
+            results[symbol] = symbol_results
         
         return {
             "status": "success",
             "current_time": current_time,
-            "pairs_processed": len(pairs),
+            "symbols_processed": len(symbols),
             "results": results
         }
     

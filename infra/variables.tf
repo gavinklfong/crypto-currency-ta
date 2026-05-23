@@ -35,6 +35,7 @@ variable "lambdas" {
     zip_path      = string
     route_key     = string
     schedule      = optional(string) # e.g. "rate(1 minute)"
+    event_input   = optional(string) # JSON event data to pass to Lambda
   }))
   default = {
     fetch_market_data = {
@@ -42,6 +43,12 @@ variable "lambdas" {
       zip_path      = "../.package/deployment-fetch-market-data.zip"
       route_key     = "GET /trigger-fetch-market-data"
       schedule      = "rate(1 minute)"
+      # Pass cryptocurrency symbols to the Lambda without hardcoding
+      event_input = jsonencode({
+        detail = {
+          symbols = ["XBTUSD"]
+        }
+      })
     }
     calculate_ta = {
       function_name = "calculate-ta"
@@ -53,6 +60,12 @@ variable "lambdas" {
       zip_path      = "../.package/deployment-aggregate-timeframe.zip"
       route_key     = "GET /aggregate-timeframe"
       schedule      = "rate(1 minute)"
+      # Pass cryptocurrency symbols to the aggregation Lambda
+      event_input = jsonencode({
+        detail = {
+          symbols = ["XXBTZUSD"]
+        }
+      })
     }
   }
 }

@@ -5,7 +5,8 @@ from datetime import datetime
 from itertools import islice
 
 
-SYMBOL = "XBTUSD"  # Bitcoin/USD       
+# Default symbol if none is provided
+DEFAULT_SYMBOLS = ["XBTUSD"]  # Bitcoin/USD
 CANDLE_INTERVAL = 1  # 1-minute candles (triggered every 1 minute)
 KRAKEN_OHLC_URL = "https://api.kraken.com/0/public/OHLC"
 DYNAMODB_TABLE_NAME = "crypto-currency-ta-market-data"
@@ -71,55 +72,94 @@ def write_ohlc_to_dynamodb(pair, timeframe_minutes, ohlc_data):
 
 
 def lambda_handler(event, context):
-    params = {
-        "pair": SYMBOL,
-        "interval": CANDLE_INTERVAL
-    }
-
+    # Extract symbols from EventBridge event
+    if "detail" in event:
+        event_data = event["detail"]
+    else:
+        event_data = event
+    
+    symbols = event_data.get("symbols", DEFAULT_SYMBOLS)
+    
+    if not symbols:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "No symbols specified in event"}),
+        }
+    
+    results = []
+    total_records_written = 0
+    event_entries = []
+    
     try:
-        response = requests.get(KRAKEN_OHLC_URL, params=params, timeout=10)
-        data = response.json()
-
-        if data.get("error"):
-            return {
-                "statusCode": 500,
-                "body": json.dumps({"error": data["error"]}),
+        # Process each symbol
+        for symbol in symbols:
+            params = {
+                "pair": symbol,
+                "interval": CANDLE_INTERVAL
             }
-
-        # Kraken returns a dict with the pair name as the key
-        pair_key = list(data["result"].keys())[0]
-        ohlc = data["result"][pair_key]
-        records_to_persist = ohlc[-10:]
-
-
-        # Write the most recent 10 OHLC data points to DynamoDB
-        records_written = write_ohlc_to_dynamodb(pair_key, params["interval"], records_to_persist)
-
-        # Emit event for price updated
-        events.put_events(
-            Entries=[{
-                "Source": "market-data-fetcher",
-                "DetailType": "market-data-updated",
-                "Detail": json.dumps({
-                    "pair": pair_key,
-                    "timeframe": f"{params['interval']}m",
-                    "timestamp": int(records_to_persist[-1][0])  # timestamp of the latest candle
+            
+            try:
+                response = requests.get(KRAKEN_OHLC_URL, params=params, timeout=10)
+                data = response.json()
+                
+                if data.get("error"):
+                    results.append({
+                        "symbol": symbol,
+                        "status": "error",
+                        "error": data["error"],
+                        "records_written": 0
+                    })
+                    continue
+                
+                # Kraken returns a dict with the pair name as the key
+                pair_key = list(data["result"].keys())[0]
+                ohlc = data["result"][pair_key]
+                records_to_persist = ohlc[-10:]
+                
+                # Write the most recent 10 OHLC data points to DynamoDB
+                records_written = write_ohlc_to_dynamodb(pair_key, params["interval"], records_to_persist)
+                total_records_written += records_written
+                
+                results.append({
+                    "symbol": pair_key,
+                    "status": "success",
+                    "count": len(ohlc),
+                    "records_written": records_written
                 })
-            }]
-        )
-
+                
+                # Queue event for price updated (only if data was written)
+                if records_written > 0:
+                    event_entries.append({
+                        "Source": "market-data-fetcher",
+                        "DetailType": "market-data-updated",
+                        "Detail": json.dumps({
+                            "pair": pair_key,
+                            "timeframe": f"{params['interval']}m",
+                            "timestamp": int(records_to_persist[-1][0])  # timestamp of the latest candle
+                        })
+                    })
+            
+            except Exception as symbol_error:
+                results.append({
+                    "symbol": symbol,
+                    "status": "error",
+                    "error": str(symbol_error),
+                    "records_written": 0
+                })
+        
+        # Emit all events at once
+        if event_entries:
+            events.put_events(Entries=event_entries)
+        
         return {
             "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "pair": pair_key,
-                    "count": len(ohlc),
-                    "records_written_to_dynamodb": records_written,
-                    "ohlc": records_to_persist,
-                }
-            ),
+            "body": json.dumps({
+                "symbols_processed": len(symbols),
+                "total_records_written": total_records_written,
+                "results": results,
+            }),
         }
-
+    
     except Exception as e:
         return {
             "statusCode": 500,
