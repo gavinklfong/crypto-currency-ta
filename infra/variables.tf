@@ -48,6 +48,12 @@ variable "lambdas" {
       zip_path      = "../.package/deployment-calculate-ta.zip"
       route_key     = "GET /calculate-ta"
     }
+    aggregate_timeframe = {
+      function_name = "aggregate-timeframe"
+      zip_path      = "../.package/deployment-aggregate-timeframe.zip"
+      route_key     = "GET /aggregate-timeframe"
+      schedule      = "rate(1 minute)"
+    }
   }
 }
 
