@@ -28,189 +28,6 @@ variable "lambda_exec_role_name" {
   default     = "crypto-currency-ta-lambda-exec"
 }
 
-
-variable "lambdas" {
-  description = "Lambda function configurations"
-  type = map(object({
-    function_name = string
-    zip_path      = string
-    route_key     = optional(string)
-
-    # list of schedule objects
-    schedules = optional(
-      list(object(
-        {
-          name        = string
-          schedule    = string
-          event_input = optional(any)
-      })),
-      null
-    )
-  }))
-  default = {
-    fetch_market_data = {
-      function_name = "fetch-market-data"
-      zip_path      = "../.package/deployment-fetch-market-data.zip"
-      route_key     = "GET /trigger-fetch-market-data"
-      schedules = [
-        {
-          name     = "XXBTZUSD-1m"
-          schedule = "rate(1 minute)"
-          event_input = {
-            detail = {
-              symbol = "XXBTZUSD"
-            }
-          }
-        }
-      ]
-    }
-
-    calculate_ta = {
-      function_name = "calculate-ta"
-      zip_path      = "../.package/deployment-calculate-ta.zip"
-      schedules = [
-        {
-          name     = "XXBTZUSD-1m"
-          schedule = "rate(1 minute)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "1m"
-            }
-          }
-        },
-        {
-          name     = "XXBTZUSD-5m"
-          schedule = "rate(1 minute)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "5m"
-            }
-          }
-        },
-        {
-          name     = "XXBTZUSD-15m"
-          schedule = "rate(5 minutes)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "15m"
-            }
-          }
-        },
-        {
-          name     = "XXBTZUSD-30m"
-          schedule = "rate(15 minutes)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "30m"
-            }
-          }
-        },
-        {
-          name     = "XXBTZUSD-1h"
-          schedule = "rate(30 minutes)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "1h"
-            }
-          }
-        },
-        {
-          name     = "XXBTZUSD-4h"
-          schedule = "rate(1 hour)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "4h"
-            }
-          }
-        },
-        {
-          name     = "XXBTZUSD-1d"
-          schedule = "rate(4 hours)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "1d"
-            }
-          }
-        }
-      ]
-    }
-
-    aggregate_timeframe = {
-      function_name = "aggregate-timeframe"
-      zip_path      = "../.package/deployment-aggregate-timeframe.zip"
-      schedules = [
-        {
-          name     = "XXBTZUSD-5m"
-          schedule = "rate(1 minute)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "5m"
-            }
-          }
-        },
-        {
-          name     = "XXBTZUSD-15m"
-          schedule = "rate(5 minutes)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "15m"
-            }
-          }
-        },
-        {
-          name     = "XXBTZUSD-30m"
-          schedule = "rate(15 minutes)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "30m"
-            }
-          }
-        },
-        {
-          name     = "XXBTZUSD-1h"
-          schedule = "rate(30 minutes)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "1h"
-            }
-          }
-        },
-        {
-          name     = "XXBTZUSD-4h"
-          schedule = "rate(1 hour)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "4h"
-            }
-          }
-        },
-        {
-          name     = "XXBTZUSD-4d"
-          schedule = "rate(1 day)"
-          event_input = {
-            detail = {
-              symbol    = "XXBTZUSD"
-              timeframe = "1d"
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
 variable "extra_routes" {
   description = "Additional routes that reuse existing Lambdas"
   type = map(object({
@@ -221,6 +38,59 @@ variable "extra_routes" {
     root = {
       route_key = "GET /"
       lambda    = "fetch_market_data"
+    }
+  }
+}
+
+
+variable "symbols" {
+  description = "List of trading symbols to track"
+  type        = list(string)
+  default     = ["XXBTZUSD", "XETHZUSD"]
+}
+
+variable "timeframe_schedules" {
+  description = "Mapping of timeframe identifiers to CloudWatch rate expressions"
+  type        = map(string)
+  default = {
+    "1m"  = "rate(1 minute)"
+    "5m"  = "rate(1 minute)"
+    "15m" = "rate(1 minute)"
+    "30m" = "rate(1 minute)"
+    "1h"  = "rate(5 minutes)"
+    "4h"  = "rate(5 minutes)"
+    "1d"  = "rate(5 minutes)"
+    "1w"  = "rate(5 minutes)"
+  }
+}
+
+variable "lambdas" {
+  description = "Lambda configurations with timeframe subscriptions"
+  type = map(object({
+    function_name = string
+    zip_path      = string
+    route_key     = optional(string)
+    timeframes    = list(string)
+
+  }))
+  default = {
+    fetch_market_data = {
+      function_name = "fetch-market-data"
+      zip_path      = "../.package/deployment-fetch-market-data.zip"
+      route_key     = "GET /trigger-fetch-market-data"
+      timeframes    = ["1m"]
+    }
+
+    calculate_ta = {
+      function_name = "calculate-ta"
+      zip_path      = "../.package/deployment-calculate-ta.zip"
+      timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
+    }
+
+    aggregate_timeframe = {
+      function_name = "aggregate-timeframe"
+      zip_path      = "../.package/deployment-aggregate-timeframe.zip"
+      timeframes    = ["5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
   }
 }

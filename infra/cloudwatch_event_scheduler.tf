@@ -1,57 +1,72 @@
-# 1. Flatten the nested map/list into a single flat map
 locals {
-  flat_schedules = flatten([
+  # 1. Generate every combination of Lambda x Symbol x Timeframe
+  raw_targets = flatten([
     for lambda_key, lambda_config in var.lambdas : [
-      for schedule in coalesce(lambda_config.schedules, []) : {
-        lambda_key   = lambda_key
-        lambda_name  = lambda_config.function_name
-        rule_name    = schedule.name
-        schedule_exp = schedule.schedule
-        event_input  = schedule.event_input
+      for symbol in var.symbols : [
+        for tf in lambda_config.timeframes : {
+          target_key   = "${lambda_key}-${symbol}-${tf}"
+          rule_name    = "${symbol}-${tf}"
+          schedule_exp = var.timeframe_schedules[tf]
+          lambda_key   = lambda_key
 
-        # Create a unique key for the for_each loop
-        unique_key = "${lambda_key}-${schedule.name}"
-      }
+          # Dynamically build the event JSON
+          event_input = {
+            detail = merge(
+              { symbol = symbol },
+              { timeframe = tf }
+            )
+          }
+        }
+      ]
     ]
   ])
 
-  schedule_map = {
-    for item in local.flat_schedules : item.unique_key => item
+  # 2. Map targets for the aws_cloudwatch_event_target resource
+  targets_map = {
+    for target in local.raw_targets : target.target_key => target
+  }
+
+  # 3. Deduplicate Rules so multiple Lambdas can share the same CloudWatch schedule (e.g., XXBTZUSD-1m)
+  unique_rules_map = {
+    for target in local.raw_targets : target.rule_name => target.schedule_exp...
+  }
+
+  rules_to_create = {
+    for rule_name, exps in local.unique_rules_map : rule_name => exps[0]
   }
 }
 
-# 2. Create the CloudWatch Event Rules (EventBridge)
+# ---------------------------------------------------------
+# Resources
+# ---------------------------------------------------------
+
+# Creates deduplicated CloudWatch Event Rules (e.g., just one "XXBTZUSD-1m" rule total)
 resource "aws_cloudwatch_event_rule" "schedule" {
-  for_each = local.schedule_map
+  for_each = local.rules_to_create
 
-  name                = each.value.rule_name
-  description         = "Triggers Lambda ${each.value.lambda_name}"
-  schedule_expression = each.value.schedule_exp
+  name                = each.key
+  description         = "Schedule rule for ${each.key}"
+  schedule_expression = each.value
 }
 
-# 3. Create the CloudWatch Event Targets pointing to your Lambda
+# Connects specific Lambdas to specific Rules based on their subscriptions
 resource "aws_cloudwatch_event_target" "lambda_target" {
-  for_each = local.schedule_map
+  for_each = local.targets_map
 
-  rule      = aws_cloudwatch_event_rule.schedule[each.key].name
-  target_id = "${each.value.lambda_name}-Target"
+  rule      = aws_cloudwatch_event_rule.schedule[each.value.rule_name].name
+  target_id = each.key
+  arn       = aws_lambda_function.lambda[each.value.lambda_key].arn
 
-  # References your specific lambda resource name
-  arn = aws_lambda_function.lambda[each.value.lambda_key].arn
-
-  # Inject the event_input if it exists
-  input = each.value.event_input != null ? jsonencode(each.value.event_input) : null
+  input = jsonencode(each.value.event_input)
 }
 
-# 4. Grant EventBridge permission to invoke the Lambda functions
+# Grants EventBridge permission to invoke the targets
 resource "aws_lambda_permission" "allow_cloudwatch" {
-  for_each = local.schedule_map
+  for_each = local.targets_map
 
-  statement_id = "AllowExecutionFromCloudWatch-${each.value.rule_name}"
-  action       = "lambda:InvokeFunction"
-
-  # References your specific lambda resource name
+  statement_id  = "AllowEventBridge-${each.key}"
+  action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.lambda[each.value.lambda_key].function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.schedule[each.key].arn
+  source_arn    = aws_cloudwatch_event_rule.schedule[each.value.rule_name].arn
 }

@@ -17,6 +17,7 @@ TABLE_NAME = "crypto-currency-ta-market-data"
 table = dynamodb.Table(TABLE_NAME)
 
 # Default symbol if none is provided
+LOOKBACK_CANDLES = 10
 DEFAULT_SYMBOL = "XBTUSD"  # Bitcoin/USD
 DEFAULT_TIMEFRAME = "5m"  # Default aggregation timeframe
 
@@ -198,8 +199,7 @@ def process_pair_timeframe(pair: str, timeframe: str, current_time: int):
     timeframe_seconds = TIMEFRAMES[timeframe]
     
     # Calculate lookback window: last 5 candles + some buffer
-    lookback_candles = 5
-    lookback_seconds = timeframe_seconds * (lookback_candles + 2)
+    lookback_seconds = timeframe_seconds * (LOOKBACK_CANDLES + 2)
     
     start_ts = current_time - lookback_seconds
     end_ts = current_time
@@ -259,13 +259,6 @@ def process_pair_timeframe(pair: str, timeframe: str, current_time: int):
         # For backfill, we want the last 5 complete candles
         # For the current bucket, we write it anyway
         aggregated = aggregate_candles(candle_group)
-        
-        log_info(
-            "Aggregating candle",
-            pair=pair,
-            timeframe=timeframe,
-            bucket_ts=bucket_ts,
-            candles_in_bucket=len(candle_group))
 
         if aggregated:
             write_aggregated_candle(pair, timeframe, bucket_ts, aggregated)

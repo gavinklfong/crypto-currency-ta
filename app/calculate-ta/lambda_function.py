@@ -4,9 +4,12 @@ from datetime import datetime, timezone
 import logging
 import json
 from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+MIN_REQUIRED = 20  # tune this: e.g., 20 for EMA20, 15 for RSI(14)+1, etc.
 
 dynamodb = boto3.resource("dynamodb")
 TABLE_NAME = "crypto-currency-ta-market-data"
@@ -133,6 +136,9 @@ def write_ta_to_dynamodb(pair, timeframe, timestamp, ta):
 # ============================================================
 
 def lambda_handler(event, context):
+
+    log_info("Lambda triggered", event=json.dumps(event))
+
     # SQS event
     if "Records" in event:
         record = event["Records"][0]
@@ -162,73 +168,86 @@ def lambda_handler(event, context):
 # SINGLE-CANDLE MODE
 # ============================================================
 
+def to_float_safe(val):
+    if val is None:
+        return None
+    if isinstance(val, Decimal):
+        return float(val)
+    try:
+        return float(val)
+    except Exception:
+        return None
+
+def extract_closes(window):
+    closes = []
+    bad = []
+    for it in window:
+        sk = it.get("SK")
+        if "close" not in it:
+            bad.append({"sk": sk, "reason": "missing_close"})
+            continue
+        f = to_float_safe(it.get("close"))
+        if f is None:
+            bad.append({"sk": sk, "reason": "invalid_close", "value": it.get("close")})
+            continue
+        closes.append(f)
+    return closes, bad
+
 def calculate_single(event):
     pair = event["symbol"]
     timeframe = event["timeframe"]
     timestamp = int(datetime.now(timezone.utc).timestamp())
 
-    # ----------------------------------------------------
-    # 1. Fetch last 200 candles ONCE
-    # ----------------------------------------------------
+    # 1) fetch window
     window = fetch_last_n_candles(pair, timeframe, timestamp, n=200)
     log_info("Fetched candles", count=len(window), pair=pair, timeframe=timeframe)
 
-    if not window:
-        raise RuntimeError(f"MARKET_DATA_NOT_AVAILABLE, ts:{timestamp}")
+    # 2) extract closes defensively
+    closes_all, bad_items = extract_closes(window)
+    if bad_items:
+        log_info("Some items missing/invalid close", valid_count=len(closes_all), bad_count=len(bad_items), bad_sample=bad_items[:3])
 
-    # ----------------------------------------------------
-    # 2. Extract last timestamps
-    # ----------------------------------------------------
+    # 3) quit early if not enough history
+    if len(closes_all) < MIN_REQUIRED:
+        log_info("Insufficient history for TA, quitting", pair=pair, timeframe=timeframe,
+                 available=len(closes_all), required=MIN_REQUIRED)
+        # Optional: mark item in DynamoDB or emit metric here if you want observability
+        return {
+            "pair": pair,
+            "timeframe": timeframe,
+            "processed": 0,
+            "status": "insufficient_history",
+            "available_closes": len(closes_all)
+        }
+
+    # 4) proceed with TA computation (unchanged)
     last_window = window[-10:] if len(window) >= 10 else window
     last_timestamps = [extract_timestamp_from_sk(i["SK"]) for i in last_window]
-
-    log_info("Processing last candles", timestamps=last_timestamps)
-
-    # ----------------------------------------------------
-    # 3. Precompute closes + index mapping
-    # ----------------------------------------------------
-    closes_all = [float(i["close"]) for i in window]
+    closes_all_floats = closes_all  # already floats
     index_by_ts = {extract_timestamp_from_sk(i["SK"]): idx for idx, i in enumerate(window)}
 
     results = []
-
-    # ----------------------------------------------------
-    # 4. Compute TA and update each item (UpdateItem)
-    # ----------------------------------------------------
     for ts in last_timestamps:
         idx = index_by_ts[ts]
-        closes = closes_all[: idx + 1]
-
-        log_info("closes fetched", timestamp=ts, closes_count=len(closes), timestamp_index=idx)
+        closes = closes_all_floats[: idx + 1]
         ta = compute_all_ta(closes)
-
-        if not ta or len(ta.keys()) == 0:
-            log_info("Skipping TA update due to insufficient history", timestamp=ts)
+        if not ta:
+            log_info("Skipping TA update due to insufficient history for this timestamp", timestamp=ts)
             continue
 
-        # Safe partial update — does NOT overwrite the item
         pk = f"PAIR#{pair}"
         sk = f"TF#{timeframe}#TS#{ts}"
-
         table.update_item(
             Key={"PK": pk, "SK": sk},
             UpdateExpression="SET ta = :ta",
             ExpressionAttributeValues={":ta": ta}
         )
+        # log_info("TA written", pair=pair, timeframe=timeframe, timestamp=ts)
+        results.append({"timestamp": ts, "ta": ta})
 
-        log_info("TA written", pair=pair, timeframe=timeframe, timestamp=ts)
+    log_info("TA calculation completed", pair=pair, timeframe=timeframe, processed_count=len(results))
+    return {"pair": pair, "timeframe": timeframe, "processed": len(results), "details": results}
 
-        results.append({
-            "timestamp": ts,
-            "ta": ta
-        })
-
-    return {
-        "pair": pair,
-        "timeframe": timeframe,
-        "processed": len(results),
-        "details": results
-    }
 
 # ============================================================
 # RANGE RE-CALCULATION MODE
