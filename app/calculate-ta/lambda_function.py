@@ -165,7 +165,7 @@ def lambda_handler(event, context):
 def calculate_single(event):
     pair = event["pair"]
     timeframe = event["timeframe"]
-    timestamp = int(event["timestamp"])
+    timestamp = int(datetime.now(timezone.utc).timestamp())
 
     # ----------------------------------------------------
     # 1. Fetch last 200 candles ONCE

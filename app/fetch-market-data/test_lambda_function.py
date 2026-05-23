@@ -9,11 +9,9 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    @patch("lambda_function.events")
-    def test_lambda_handler_success(self, mock_events, mock_get, mock_dynamodb):
+    def test_lambda_handler_success(self, mock_get, mock_dynamodb):
         """Test lambda handler with successful Kraken API response and DynamoDB write"""
         mock_dynamodb.put_item.return_value = {}
-        mock_events.put_events.return_value = {}
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -50,11 +48,9 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    @patch("lambda_function.events")
-    def test_lambda_handler_dynamodb_put_item_called(self, mock_events, mock_get, mock_dynamodb):
+    def test_lambda_handler_dynamodb_put_item_called(self, mock_get, mock_dynamodb):
         """Test that put_item is called with correct table name"""
-        mock_dynamodb.put_item.return_value = {}
-        mock_events.put_events.return_value = {}
+        mock_dynamodb.put_item.return_value = {}        
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -76,11 +72,9 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    @patch("lambda_function.events")
-    def test_lambda_handler_dynamodb_item_structure(self, mock_events, mock_get, mock_dynamodb):
+    def test_lambda_handler_dynamodb_item_structure(self, mock_get, mock_dynamodb):
         """Test that DynamoDB items have correct structure with correct keys"""
         mock_dynamodb.put_item.return_value = {}
-        mock_events.put_events.return_value = {}
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -118,8 +112,7 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    @patch("lambda_function.events")
-    def test_lambda_handler_kraken_error(self, mock_events, mock_get, mock_dynamodb):
+    def test_lambda_handler_kraken_error(self, mock_get, mock_dynamodb):
         """Test lambda handler when Kraken API returns an error"""
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -137,8 +130,7 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    @patch("lambda_function.events")
-    def test_lambda_handler_request_timeout(self, mock_events, mock_get, mock_dynamodb):
+    def test_lambda_handler_request_timeout(self, mock_get, mock_dynamodb):
         """Test lambda handler when request times out"""
         mock_get.side_effect = Exception("Request timeout")
 
@@ -152,11 +144,9 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    @patch("lambda_function.events")
-    def test_lambda_handler_dynamodb_write_failure(self, mock_events, mock_get, mock_dynamodb):
+    def test_lambda_handler_dynamodb_write_failure(self, mock_get, mock_dynamodb):
         """Test lambda handler when DynamoDB write fails"""
         mock_dynamodb.put_item.side_effect = Exception("DynamoDB connection error")
-        mock_events.put_events.return_value = {}
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -177,11 +167,9 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    @patch("lambda_function.events")
-    def test_lambda_handler_multiple_ohlc_records(self, mock_events, mock_get, mock_dynamodb):
+    def test_lambda_handler_multiple_ohlc_records(self, mock_get, mock_dynamodb):
         """Test lambda handler writes multiple OHLC candles to DynamoDB"""
         mock_dynamodb.put_item.return_value = {}
-        mock_events.put_events.return_value = {}
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -209,11 +197,9 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    @patch("lambda_function.events")
-    def test_lambda_handler_response_includes_ohlc_data(self, mock_events, mock_get, mock_dynamodb):
+    def test_lambda_handler_response_includes_ohlc_data(self, mock_get, mock_dynamodb):
         """Test that lambda handler response includes original OHLC data"""
         mock_dynamodb.put_item.return_value = {}
-        mock_events.put_events.return_value = {}
 
         ohlc_data = [
             [1704067200, 42000, 42500, 41500, 42200, 42100, 1000.5],
@@ -236,13 +222,11 @@ class TestLambdaHandler:
 
     @patch("lambda_function.dynamodb_client")
     @patch("lambda_function.requests.get")
-    @patch("lambda_function.events")
-    def test_lambda_handler_writes_in_sequence(self, mock_events, mock_get, mock_dynamodb):
+    def test_lambda_handler_writes_in_sequence(self, mock_get, mock_dynamodb):
         """Verify that DynamoDB put_item is called for each candle"""
 
         # Mock put_item to succeed
         mock_dynamodb.put_item.return_value = {}
-        mock_events.put_events.return_value = {}
 
         # Mock Kraken API response with 3 candles
         mock_response = MagicMock()

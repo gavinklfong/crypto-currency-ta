@@ -6,17 +6,15 @@ import lambda_function  # your lambda file
 
 
 @pytest.mark.integration
-@patch("lambda_function.events")
 @patch("lambda_function.dynamodb_client")
-def test_lambda_handler_real_kraken(mock_dynamodb, mock_events):
+def test_lambda_handler_real_kraken(mock_dynamodb):
     """
     Real integration test that calls the live Kraken OHLC API.
     DynamoDB writes and EventBridge puts are mocked.
     """
 
-    # Mock DynamoDB and events to avoid real AWS calls
+    # Mock DynamoDB to avoid real AWS calls
     mock_dynamodb.put_item.return_value = {}
-    mock_events.put_events.return_value = {}
 
     # Call the Lambda handler (this will hit the real Kraken API)
     result = lambda_function.lambda_handler({}, {})
@@ -51,5 +49,3 @@ def test_lambda_handler_real_kraken(mock_dynamodb, mock_events):
 
     # Ensure DynamoDB put_item was called
     assert mock_dynamodb.put_item.called
-    # Ensure EventBridge put_events was called
-    assert mock_events.put_events.called

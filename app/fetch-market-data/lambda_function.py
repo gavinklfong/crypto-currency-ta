@@ -13,7 +13,6 @@ CANDLE_INTERVAL = 1  # 1-minute candles (triggered every 1 minute)
 KRAKEN_OHLC_URL = "https://api.kraken.com/0/public/OHLC"
 DYNAMODB_TABLE_NAME = "crypto-currency-ta-market-data"
 
-events = boto3.client("events")
 dynamodb_client = boto3.client("dynamodb", region_name="us-east-2")
 
 
@@ -118,19 +117,6 @@ def lambda_handler(event, context):
         # Write the most recent 10 OHLC data points to DynamoDB
         records_written = write_ohlc_to_dynamodb(pair_key, params["interval"], records_to_persist)
         latest_candle_ts = int(records_to_persist[-1][0]) if records_to_persist else None
-
-        # Emit event for price updated
-        events.put_events(
-            Entries=[{
-                "Source": "market-data-fetcher",
-                "DetailType": "market-data-updated",
-                "Detail": json.dumps({
-                    "pair": pair_key,
-                    "timeframe": f"{params['interval']}m",
-                    "timestamp": latest_candle_ts  # timestamp of the latest candle
-                })
-            }]
-        )
 
         log_info("Records written to DynamoDB", pair=pair_key, timestamp=latest_candle_ts, count=records_written)
 
