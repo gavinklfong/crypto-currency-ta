@@ -1,6 +1,7 @@
 
 
 import boto3
+from botocore.exceptions import ClientError
 import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Tuple
@@ -17,6 +18,7 @@ table = dynamodb.Table(TABLE_NAME)
 
 # Default symbol if none is provided
 DEFAULT_SYMBOL = "XBTUSD"  # Bitcoin/USD
+DEFAULT_TIMEFRAME = "5m"  # Default aggregation timeframe
 
 # Timeframe configurations (in seconds)
 TIMEFRAMES = {
@@ -129,12 +131,12 @@ def aggregate_candles(candles: List[Dict]) -> Dict:
     }
 
 def write_aggregated_candle(pair: str, timeframe: str, timestamp: int, candle_data: Dict):
-    """Write aggregated candle to DynamoDB only if it does NOT already exist."""
     pk = f"PAIR#{pair}"
     sk = f"TF#{timeframe}#TS#{timestamp}"
 
     try:
         candle_data = to_decimal(candle_data)
+
         table.put_item(
             Item={
                 "PK": pk,
@@ -158,6 +160,7 @@ def write_aggregated_candle(pair: str, timeframe: str, timestamp: int, candle_da
             },
             ConditionExpression="attribute_not_exists(SK)"
         )
+
         log_info(
             "Aggregated candle inserted",
             pair=pair,
@@ -165,10 +168,25 @@ def write_aggregated_candle(pair: str, timeframe: str, timestamp: int, candle_da
             timestamp=timestamp
         )
 
+    except ClientError as e:
+        # Check for ConditionalCheckFailedException
+        if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            # Item already exists — skip logging as error
+            return
+
+        # Other DynamoDB errors should be logged
+        log_error(
+            "DynamoDB write failed",
+            pair=pair,
+            timeframe=timeframe,
+            timestamp=timestamp,
+            error=str(e)
+        )
+
     except Exception as e:
-        # If the item already exists, DynamoDB throws ConditionalCheckFailedException
-        log_info(
-            "Aggregated candle already exists — skipping",
+        # Non-DynamoDB errors
+        log_error(
+            "Unexpected error writing aggregated candle",
             pair=pair,
             timeframe=timeframe,
             timestamp=timestamp,
@@ -263,59 +281,47 @@ def process_pair_timeframe(pair: str, timeframe: str, current_time: int):
     return processed_count
 
 def lambda_handler(event, context):
-    """
-    Main Lambda handler triggered by EventBridge every 5 minutes.
-    Aggregates 1-minute market data into multiple timeframes.
-    """
-    
     try:
         log_info("Lambda triggered", event=json.dumps(event))
-        
-        # Extract symbols from event (either from detail or directly)
+
+        # Extract symbol
         if "detail" in event:
-            # EventBridge format - require symbols in detail
             event_data = event["detail"]
-            symbol = event_data.get("symbol")
         else:
-            # Direct format - try to get symbols, fall back to defaults
             event_data = event
-            symbol = event_data.get("symbol", DEFAULT_SYMBOL)
-        
+
+        symbol = event_data.get("symbol", DEFAULT_SYMBOL)
+        timeframe = event_data.get("timeframe", DEFAULT_TIMEFRAME)
+
         if not symbol:
             raise ValueError("No symbol provided in event")
 
+        if not timeframe:
+            raise ValueError("No timeframe provided in event")
+
+        if timeframe not in TIMEFRAMES:
+            raise ValueError(f"Invalid timeframe: {timeframe}")
+
+        if timeframe == "1m":
+            raise ValueError("1m timeframe cannot be aggregated")
+
         current_time = int(datetime.now(timezone.utc).timestamp())
-        
-        results = {}
-        
-        # Process each timeframe for the current symbol
-        for timeframe in TIMEFRAMES.keys():
-            if timeframe == "1m":
-                # Skip 1-minute, it's the source data
-                continue
-            
-            try:
-                processed = process_pair_timeframe(symbol, timeframe, current_time)
-                results[timeframe] = processed
-                
-            except Exception as e:
-                log_error(
-                    "Error processing timeframe",
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    error=str(e)
-                )
-        
+
+        # Process ONLY the requested timeframe
+        processed = process_pair_timeframe(symbol, timeframe, current_time)
+
         return {
             "status": "success",
             "current_time": current_time,
             "symbol_processed": symbol,
-            "results": results
+            "timeframe_processed": timeframe,
+            "candles_written": processed
         }
-    
+
     except Exception as e:
         log_error("Lambda execution failed", error=str(e), event=event)
         return {
             "status": "error",
             "message": str(e)
         }
+
