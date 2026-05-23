@@ -150,7 +150,7 @@ def lambda_handler(event, context):
     # Check if range calculation is requested
     if "start_ts" in event_data and "end_ts" in event_data:
         return calculate_range(
-            event_data["pair"],
+            event_data["symbol"],
             event_data["timeframe"],
             event_data["start_ts"],
             event_data["end_ts"]
@@ -163,7 +163,7 @@ def lambda_handler(event, context):
 # ============================================================
 
 def calculate_single(event):
-    pair = event["pair"]
+    pair = event["symbol"]
     timeframe = event["timeframe"]
     timestamp = int(datetime.now(timezone.utc).timestamp())
 

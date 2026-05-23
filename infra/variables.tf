@@ -78,6 +78,66 @@ variable "lambdas" {
               timeframe = "1m"
             }
           }
+        },
+        {
+          name     = "XXBTZUSD-5m"
+          schedule = "rate(1 minute)"
+          event_input = {
+            detail = {
+              symbol    = "XXBTZUSD"
+              timeframe = "5m"
+            }
+          }
+        },
+        {
+          name     = "XXBTZUSD-15m"
+          schedule = "rate(5 minutes)"
+          event_input = {
+            detail = {
+              symbol    = "XXBTZUSD"
+              timeframe = "15m"
+            }
+          }
+        },
+        {
+          name     = "XXBTZUSD-30m"
+          schedule = "rate(15 minutes)"
+          event_input = {
+            detail = {
+              symbol    = "XXBTZUSD"
+              timeframe = "30m"
+            }
+          }
+        },
+        {
+          name     = "XXBTZUSD-1h"
+          schedule = "rate(30 minutes)"
+          event_input = {
+            detail = {
+              symbol    = "XXBTZUSD"
+              timeframe = "1h"
+            }
+          }
+        },
+        {
+          name     = "XXBTZUSD-4h"
+          schedule = "rate(1 hour)"
+          event_input = {
+            detail = {
+              symbol    = "XXBTZUSD"
+              timeframe = "4h"
+            }
+          }
+        },
+        {
+          name     = "XXBTZUSD-1d"
+          schedule = "rate(4 hours)"
+          event_input = {
+            detail = {
+              symbol    = "XXBTZUSD"
+              timeframe = "1d"
+            }
+          }
         }
       ]
     }
@@ -103,6 +163,46 @@ variable "lambdas" {
             detail = {
               symbol    = "XXBTZUSD"
               timeframe = "15m"
+            }
+          }
+        },
+        {
+          name     = "XXBTZUSD-30m"
+          schedule = "rate(15 minutes)"
+          event_input = {
+            detail = {
+              symbol    = "XXBTZUSD"
+              timeframe = "30m"
+            }
+          }
+        },
+        {
+          name     = "XXBTZUSD-1h"
+          schedule = "rate(30 minutes)"
+          event_input = {
+            detail = {
+              symbol    = "XXBTZUSD"
+              timeframe = "1h"
+            }
+          }
+        },
+        {
+          name     = "XXBTZUSD-4h"
+          schedule = "rate(1 hour)"
+          event_input = {
+            detail = {
+              symbol    = "XXBTZUSD"
+              timeframe = "4h"
+            }
+          }
+        },
+        {
+          name     = "XXBTZUSD-4d"
+          schedule = "rate(1 day)"
+          event_input = {
+            detail = {
+              symbol    = "XXBTZUSD"
+              timeframe = "1d"
             }
           }
         }
