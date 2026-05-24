@@ -159,7 +159,10 @@ def write_aggregated_candle(pair: str, timeframe: str, timestamp: int, candle_da
                 "ha_close": candle_data.get("ha_close"),
                 "created_at": datetime.now(timezone.utc).isoformat(),
             },
-            ConditionExpression="attribute_not_exists(close)"
+            ConditionExpression="attribute_not_exists(#c)",
+            ExpressionAttributeNames={
+                "#c": "close"
+            }
         )
 
         log_info(
