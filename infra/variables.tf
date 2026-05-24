@@ -55,12 +55,12 @@ variable "timeframe_schedules" {
   default = {
     "1m"  = "rate(1 minute)"
     "5m"  = "rate(1 minute)"
-    "15m" = "rate(1 minute)"
-    "30m" = "rate(1 minute)"
-    "1h"  = "rate(5 minutes)"
-    "4h"  = "rate(5 minutes)"
-    "1d"  = "rate(5 minutes)"
-    "1w"  = "rate(5 minutes)"
+    "15m" = "rate(5 minutes)"
+    "30m" = "rate(15 minutes)"
+    "1h"  = "rate(30 minutes)"
+    "4h"  = "rate(1 hour)"
+    "1d"  = "rate(4 hours)"
+    "1w"  = "rate(1 day)"
   }
 }
 
