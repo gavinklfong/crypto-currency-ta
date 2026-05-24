@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+    paths:
+      - '**/*.py'
+      - '**/*.tf'    
+      - '**/requirements.txt'
 
 jobs:
   test:
