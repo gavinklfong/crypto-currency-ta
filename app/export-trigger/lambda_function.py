@@ -10,16 +10,18 @@ HOUR_WINDOW = 2
 # 🔧 CONFIG: symbols to export
 SYMBOLS = ["XXBTXUSD", "XETHZUSD"]
 
-# 🔧 CONFIG: timeframes to export
-TIMEFRAMES = [
-    "1m", "5m", "15m", "30m",
-    "1h", "4h",
-    "1d", "1w", "1M"
-]
 
 events = boto3.client("events")
 
 def lambda_handler(event, context):
+
+    # Extract symbol
+    if "detail" in event:
+        event_data = event["detail"]
+    else:
+        event_data = event
+
+    timeframe = event_data.get("timeframe")
 
     now = datetime.now(timezone.utc)
 
@@ -37,21 +39,19 @@ def lambda_handler(event, context):
         end_ts = int(end_hour.timestamp()) - 1
 
         for symbol in SYMBOLS:
-            for timeframe in TIMEFRAMES:
+            detail = {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "start_ts": start_ts,
+                "end_ts": end_ts
+            }
 
-                detail = {
-                    "symbol": symbol,
-                    "timeframe": timeframe,
-                    "start_ts": start_ts,
-                    "end_ts": end_ts
-                }
-
-                entries.append({
-                    "Source": "dynamodb.export.scheduler",
-                    "DetailType": "export-hour",
-                    "Detail": json.dumps(detail),
-                    "EventBusName": EVENT_BUS_NAME
-                })
+            entries.append({
+                "Source": "dynamodb.export.scheduler",
+                "DetailType": "export-hour",
+                "Detail": json.dumps(detail),
+                "EventBusName": EVENT_BUS_NAME
+            })
 
     # EventBridge allows max 10 entries per call
     for i in range(0, len(entries), 10):
@@ -61,6 +61,6 @@ def lambda_handler(event, context):
         "status": "scheduled",
         "hours_sent": HOUR_WINDOW,
         "symbols": len(SYMBOLS),
-        "timeframes": len(TIMEFRAMES),
+        "timeframe": timeframe,
         "events_emitted": len(entries)
     }

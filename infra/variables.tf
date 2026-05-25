@@ -9,6 +9,16 @@ variable "dynamodb_table_name" {
 }
 
 ########################################
+# S3 Configuration
+########################################
+
+variable "export_bucket_name" {
+  description = "Name of the S3 bucket for exporting market data"
+  type        = string
+  default     = "crypto-currency-ta-exports"
+}
+
+########################################
 # API gateway Configuration
 ########################################
 
@@ -65,13 +75,13 @@ variable "timeframe_schedules" {
 }
 
 variable "lambdas" {
-  description = "Lambda configurations with timeframe subscriptions"
+  description = "Lambda configurations with timeframe subscriptions and optional schedule overrides per function"
   type = map(object({
-    function_name = string
-    zip_path      = string
-    route_key     = optional(string)
-    timeframes    = list(string)
-
+    function_name      = string
+    zip_path           = string
+    route_key          = optional(string)
+    timeframes         = list(string)
+    schedule_overrides = optional(map(string), {})
   }))
   default = {
     fetch_market_data = {
@@ -91,6 +101,19 @@ variable "lambdas" {
       function_name = "aggregate-timeframe"
       zip_path      = "../.package/deployment-aggregate-timeframe.zip"
       timeframes    = ["5m", "15m", "30m", "1h", "4h", "1d", "1w"]
+    }
+
+    export_data_to_s3 = {
+      function_name = "export-data-to-s3"
+      zip_path      = "../.package/deployment-export-data-to-s3.zip"
+      timeframes    = ["1d", "1w"]
+      # Custom schedule overrides for export function:
+      # "1d" should run once per day (not every 4 hours like calculate_ta)
+      # "1w" should run once per week (not once per day like calculate_ta)
+      schedule_overrides = {
+        "1d" = "rate(1 day)"
+        "1w" = "rate(7 days)"
+      }
     }
   }
 }
