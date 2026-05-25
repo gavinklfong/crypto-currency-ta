@@ -103,16 +103,20 @@ variable "lambdas" {
       timeframes    = ["5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
 
-    export_data_to_s3 = {
-      function_name = "export-data-to-s3"
-      zip_path      = "../.package/deployment-export-data-to-s3.zip"
-      timeframes    = ["1d", "1w"]
+    trigger-export-data-to-s3 = {
+      function_name = "trigger-export-data-to-s3"
+      zip_path      = "../.package/deployment-trigger-export-data-to-s3.zip"
+      timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
       # Custom schedule overrides for export function:
-      # "1d" should run once per day (not every 4 hours like calculate_ta)
-      # "1w" should run once per week (not once per day like calculate_ta)
       schedule_overrides = {
-        "1d" = "rate(1 day)"
-        "1w" = "rate(7 days)"
+        "1m"  = "rate(1 hour)"
+        "5m"  = "rate(1 hour)"
+        "15m" = "rate(1 hour)"
+        "30m" = "rate(1 hour)"
+        "1h"  = "rate(1 hour)"
+        "4h"  = "rate(4 hours)"
+        "1d"  = "rate(1 day)"
+        "1w"  = "rate(7 days)"
       }
     }
   }
