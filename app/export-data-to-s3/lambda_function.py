@@ -3,7 +3,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pandas as pd
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import logging
 
@@ -34,19 +34,39 @@ def log_error(message, **kwargs):
 def query_dynamodb(symbol, timeframe, start_ts, end_ts):
     pk = f"PAIR#{symbol}"
     start_sk = f"TF#{timeframe}#TS#{start_ts}"
-    end_sk   = f"TF#{timeframe}#TS#{end_ts}"
+    end_sk = f"TF#{timeframe}#TS#{end_ts}"
 
-    resp = table.query(
-        KeyConditionExpression="PK = :pk AND SK BETWEEN :start AND :end",
-        ExpressionAttributeValues={
-            ":pk": pk,
-            ":start": start_sk,
-            ":end": end_sk
-        }
-    )
+    items = []
+    last_evaluated_key = None
 
-    return resp.get("Items", [])
+    while True:
+        if last_evaluated_key:
+            resp = table.query(
+                KeyConditionExpression="PK = :pk AND SK BETWEEN :start AND :end",
+                ExpressionAttributeValues={
+                    ":pk": pk,
+                    ":start": start_sk,
+                    ":end": end_sk
+                },
+                ExclusiveStartKey=last_evaluated_key
+            )
+        else:
+            resp = table.query(
+                KeyConditionExpression="PK = :pk AND SK BETWEEN :start AND :end",
+                ExpressionAttributeValues={
+                    ":pk": pk,
+                    ":start": start_sk,
+                    ":end": end_sk
+                }
+            )
 
+        items.extend(resp.get("Items", []))
+        last_evaluated_key = resp.get("LastEvaluatedKey")
+        
+        if not last_evaluated_key:
+            break
+
+    return items
 
 # ------------------------------------------------------------
 # DataFrame preparation
@@ -134,17 +154,81 @@ def write_to_s3(buffer, s3_key):
 
 
 # ------------------------------------------------------------
+# Generate time range for a given timeframe
+# Returns (start_ts, end_ts) as Unix timestamps
+# ------------------------------------------------------------
+def get_timeframe_range(timeframe: str, now: datetime = None) -> tuple:
+    """
+    Generate start and end timestamps for a given timeframe.
+    
+    Args:
+        timeframe: One of "1m", "5m", "15m", "30m", "1h", "4h", "1d"
+        now: Reference datetime (defaults to current UTC time)
+    
+    Returns:
+        Tuple of (start_ts, end_ts) as Unix timestamps (integers)
+    
+    Logic:
+    - For 1m, 5m, 15m, 30m, 1h:
+      * end_ts = last minute of previous hour (HH:59:59)
+      * start_ts = end_ts - 2 hours
+    
+    - For 4h, 1d:
+      * end_ts = last minute of previous day (23:59:59)
+      * start_ts = end_ts - 1 day
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    
+    if timeframe in ["1m", "5m", "15m", "30m", "1h"]:
+        # End at last minute of previous hour
+        end = (now - timedelta(hours=1)).replace(minute=59, second=59, microsecond=0)
+        # Start 2 hours before end
+        start = end - timedelta(hours=2)
+    
+    elif timeframe == "4h":
+        # End at last minute of previous day
+        end = (now - timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=0)
+        # Start 1 day before end
+        start = end - timedelta(days=1)
+    
+    elif timeframe == "1d":
+        # End at last minute of previous day
+        end = (now - timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=0)
+        # Start 1 day before end
+        start = end - timedelta(days=1)
+    
+    else:
+        raise ValueError(f"Unsupported timeframe: {timeframe}")
+    
+    return int(start.timestamp()), int(end.timestamp())
+
+# ------------------------------------------------------------
 # Main Lambda Handler
 # ------------------------------------------------------------
 def lambda_handler(event, context):
 
-    detail = event["detail"]
-    symbol = detail["symbol"]
-    timeframe = detail["timeframe"]
-    start_ts = detail["start_ts"]
-    end_ts = detail["end_ts"]
+    log_info("Lambda triggered", event=json.dumps(event))
 
-    log_info("Starting export", symbol=symbol, timeframe=timeframe, start_ts=start_ts, end_ts=end_ts)
+    # Extract symbol
+    if "detail" in event:
+        event_data = event["detail"]
+    else:
+        event_data = event
+
+    symbol = event_data.get("symbol")
+    timeframe = event_data.get("timeframe")
+
+    if not symbol:
+        raise ValueError("No symbol provided in event")
+    if not timeframe:
+        raise ValueError("No timeframe provided in event")
+
+    start_ts, end_ts = get_timeframe_range(timeframe)
+
+    log_info("Starting export", symbol=symbol, timeframe=timeframe, 
+             start_ts=datetime.fromtimestamp(start_ts).isoformat(), 
+             end_ts=datetime.fromtimestamp(end_ts).isoformat())
 
     items = query_dynamodb(symbol, timeframe, start_ts, end_ts)
     if not items:

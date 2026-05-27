@@ -83,6 +83,56 @@ def get_period_range(timeframe: str, now: datetime, index: int):
 
 
 # ------------------------------------------------------------
+# Generate time range for a given timeframe
+# Returns (start_ts, end_ts) as Unix timestamps
+# ------------------------------------------------------------
+def get_timeframe_range(timeframe: str, now: datetime = None) -> tuple:
+    """
+    Generate start and end timestamps for a given timeframe.
+    
+    Args:
+        timeframe: One of "1m", "5m", "15m", "30m", "1h", "4h", "1d"
+        now: Reference datetime (defaults to current UTC time)
+    
+    Returns:
+        Tuple of (start_ts, end_ts) as Unix timestamps (integers)
+    
+    Logic:
+    - For 1m, 5m, 15m, 30m, 1h:
+      * end_ts = last minute of previous hour (HH:59:59)
+      * start_ts = end_ts - 2 hours
+    
+    - For 4h, 1d:
+      * end_ts = last minute of previous day (23:59:59)
+      * start_ts = end_ts - 1 day
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    
+    if timeframe in ["1m", "5m", "15m", "30m", "1h"]:
+        # End at last minute of previous hour
+        end = (now - timedelta(hours=1)).replace(minute=59, second=59, microsecond=0)
+        # Start 2 hours before end
+        start = end - timedelta(hours=2)
+    
+    elif timeframe == "4h":
+        # End at last minute of previous day
+        end = (now - timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=0)
+        # Start 1 day before end
+        start = end - timedelta(days=1)
+    
+    elif timeframe == "1d":
+        # End at last minute of previous day
+        end = (now - timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=0)
+        # Start 1 day before end
+        start = end - timedelta(days=1)
+    
+    else:
+        raise ValueError(f"Unsupported timeframe: {timeframe}")
+    
+    return int(start.timestamp()), int(end.timestamp())
+
+# ------------------------------------------------------------
 # Main Lambda
 # ------------------------------------------------------------
 def lambda_handler(event, context):
