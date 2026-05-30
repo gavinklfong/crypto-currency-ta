@@ -8,6 +8,7 @@ on:
       - '**/*.py'
       - '**/*.tf'    
       - '**/requirements.txt'
+      - '**/requirements-test.txt'
 
 jobs:
   test:
