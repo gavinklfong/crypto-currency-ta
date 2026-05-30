@@ -6,14 +6,22 @@ on:
       - main
     paths:
       - '**/*.py'
-      - '**/*.tf'    
-      - '**/requirements.txt'
-      - '**/requirements-test.txt'
+      - '**/*.tf'
+      - '**/requirements*.txt'
+
+  workflow_dispatch:  # <-- allows manual Terraform-only runs
+    inputs:
+      run_terraform_only:
+        description: "Run Terraform without rebuilding"
+        required: false
+        default: "false"
 
 jobs:
-  test:
+
+  build:
+    if: github.event_name == 'push'  # <-- only run build on code changes
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,9 +36,26 @@ jobs:
           AWS_DEFAULT_REGION: us-east-2
         run: python run_tests.py
 
-  deploy:
-    needs: test
+      - name: Build Lambda deployment package
+        run: python build.py
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-packages
+          path: .package/
+          retention-days: 3
+
+
+  terraform:
+    needs: [build]
     runs-on: ubuntu-latest
+
+    # Allow Terraform to run even if build job was skipped
+    if: |
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event_name == 'push')
 
     permissions:
       id-token: write
@@ -40,13 +65,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Download build artifacts (if available)
+        uses: actions/download-artifact@v4
         with:
-          python-version: "3.12"
-
-      - name: Build Lambda deployment package
-        run: python build.py
+          name: lambda-packages
+          path: .package/
+        continue-on-error: true  # <-- allows Terraform-only runs
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
