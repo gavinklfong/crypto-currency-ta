@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-APP_DIR = ROOT / "app"
+APP_DIR = ROOT / "app" / "lambdas"
 
 # Set AWS region for boto3 (required for tests)
 os.environ["AWS_DEFAULT_REGION"] = "us-east-2"
