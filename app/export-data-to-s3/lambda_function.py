@@ -15,7 +15,7 @@ TABLE_NAME = "crypto-currency-ta-market-data"
 table = dynamodb.Table(TABLE_NAME)
 
 s3 = boto3.client("s3")
-BUCKET_NAME = "crypto-currency-ta-market-data-export"
+BUCKET_NAME = "crypto-currency-ta-exports"
 
 
 # ------------------------------------------------------------
