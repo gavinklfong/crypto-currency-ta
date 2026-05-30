@@ -40,9 +40,6 @@ jobs:
       - name: Build Lambda deployment package
         run: python build.py
 
-      - name: Debug build output
-        run: ls -Ra .
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -74,9 +71,6 @@ jobs:
         with:
           name: lambda-packages
           path: build/package/
-
-      - name: Debug build output
-        run: ls -Ra .
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
