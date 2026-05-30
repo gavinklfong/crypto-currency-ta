@@ -5,8 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 LAYERS_DIR = ROOT / "app" / "layers"
-OUTPUT_DIR = ROOT / ".package" / "layers"
-HASH_DIR = ROOT / ".hashes" / "layers"
+OUTPUT_DIR = ROOT / "build" / "package" / "layers"
+HASH_DIR = ROOT / "build" / "hashes" / "layers"
 
 def file_hash(path: Path) -> str:
     h = hashlib.sha256()

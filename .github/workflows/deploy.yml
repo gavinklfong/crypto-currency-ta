@@ -47,7 +47,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lambda-packages
-          path: .package/
+          path: build/package/
           retention-days: 3
 
 
@@ -73,7 +73,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: lambda-packages
-          path: .package/
+          path: build/package/
 
       - name: Debug build output
         run: ls -Ra .

@@ -1,10 +1,6 @@
 # Ignore build artifacts
-.build/
-.build/*
-.package/
-.package/*
-.hashes/
-.hashes/*
+build/
+build/*
 
 # Terraform local state
 terraform.tfstate
@@ -25,4 +21,3 @@ crash.*.log
 __pycache__/
 *.pyc
 
-deployment.zip

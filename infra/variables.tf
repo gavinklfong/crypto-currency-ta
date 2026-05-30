@@ -84,11 +84,11 @@ variable "layers" {
   default = {
     pandas = {
       layer_name = "pandas"
-      zip_path   = "../.package/layers/pandas.zip"
+      zip_path   = "../build/package/layers/pandas.zip"
     }
     pyarrow = {
       layer_name = "pyarrow"
-      zip_path   = "../.package/layers/pyarrow.zip"
+      zip_path   = "../build/package/layers/pyarrow.zip"
     }
   }
 }
@@ -108,26 +108,26 @@ variable "lambdas" {
   default = {
     fetch_market_data = {
       function_name = "fetch-market-data"
-      zip_path      = "../.package/lambdas/fetch-market-data.zip"
+      zip_path      = "../build/package/lambdas/fetch-market-data.zip"
       route_key     = "GET /trigger-fetch-market-data"
       timeframes    = ["1m"]
     }
 
     calculate_ta = {
       function_name = "calculate-ta"
-      zip_path      = "../.package/lambdas/calculate-ta.zip"
+      zip_path      = "../build/package/lambdas/calculate-ta.zip"
       timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
 
     aggregate_timeframe = {
       function_name = "aggregate-timeframe"
-      zip_path      = "../.package/lambdas/aggregate-timeframe.zip"
+      zip_path      = "../build/package/lambdas/aggregate-timeframe.zip"
       timeframes    = ["5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
 
     export-data-to-s3 = {
       function_name = "export-data-to-s3"
-      zip_path      = "../.package/lambdas/export-data-to-s3.zip"
+      zip_path      = "../build/package/lambdas/export-data-to-s3.zip"
       layers        = ["pandas", "pyarrow"]
       timeout       = 120
       timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]

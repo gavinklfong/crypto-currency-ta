@@ -9,9 +9,9 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / "app" / "lambdas" 
-BUILD_DIR = ROOT / ".build" / "lambdas" 
-PACKAGE_DIR = ROOT / ".package" / "lambdas" 
-HASH_DIR = ROOT / ".hashes" / "lambdas" 
+BUILD_DIR = ROOT / "build" / "build" / "lambdas" 
+PACKAGE_DIR = ROOT / "build" /  "package" / "lambdas" 
+HASH_DIR = ROOT / "build" / "hashes" / "lambdas" 
 
 
 def run(cmd):
