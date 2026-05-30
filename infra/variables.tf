@@ -74,11 +74,33 @@ variable "timeframe_schedules" {
   }
 }
 
+
+variable "layers" {
+  description = "Lambda layers with their corresponding zip file paths"
+  type = map(object({
+    layer_name = string
+    zip_path   = string
+  }))
+  default = {
+    pandas = {
+      layer_name = "pandas"
+      zip_path   = "../.package/layers/pandas.zip"
+    }
+    pyarrow = {
+      layer_name = "pyarrow"
+      zip_path   = "../.package/layers/pyarrow.zip"
+    }
+  }
+}
+
 variable "lambdas" {
   description = "Lambda configurations with timeframe subscriptions and optional schedule overrides per function"
   type = map(object({
     function_name      = string
     zip_path           = string
+    layers             = optional(list(string), [])
+    timeout            = optional(number, 30)
+    memory_size        = optional(number)
     route_key          = optional(string)
     timeframes         = list(string)
     schedule_overrides = optional(map(string), {})
@@ -86,42 +108,39 @@ variable "lambdas" {
   default = {
     fetch_market_data = {
       function_name = "fetch-market-data"
-      zip_path      = "../.package/lambdas/deployment-fetch-market-data.zip"
+      zip_path      = "../.package/lambdas/fetch-market-data.zip"
       route_key     = "GET /trigger-fetch-market-data"
       timeframes    = ["1m"]
     }
 
     calculate_ta = {
       function_name = "calculate-ta"
-      zip_path      = "../.package/lambdas/deployment-calculate-ta.zip"
+      zip_path      = "../.package/lambdas/calculate-ta.zip"
       timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
 
     aggregate_timeframe = {
       function_name = "aggregate-timeframe"
-      zip_path      = "../.package/lambdas/deployment-aggregate-timeframe.zip"
+      zip_path      = "../.package/lambdas/aggregate-timeframe.zip"
       timeframes    = ["5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
 
     export-data-to-s3 = {
       function_name = "export-data-to-s3"
-      zip_path      = "../.package/lambdas/deployment-export-data-to-s3.zip"
-      # timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
-      timeframes = ["1m"]
+      zip_path      = "../.package/lambdas/export-data-to-s3.zip"
+      layers        = ["pandas", "pyarrow"]
+      timeout       = 120
+      timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
       # Custom schedule overrides for export function:
       schedule_overrides = {
-        "1m" = "rate(1 minute)"
+        "1m"  = "rate(1 hour)"
+        "5m"  = "rate(1 hour)"
+        "15m" = "rate(1 hour)"
+        "30m" = "rate(1 hour)"
+        "1h"  = "rate(1 hour)"
+        "4h"  = "rate(1 day)"
+        "1d"  = "rate(1 day)"
       }
-      # schedule_overrides = {
-      #   "1m"  = "rate(1 hour)"
-      #   "5m"  = "rate(1 hour)"
-      #   "15m" = "rate(1 hour)"
-      #   "30m" = "rate(1 hour)"
-      #   "1h"  = "rate(1 hour)"
-      #   "4h"  = "rate(1 day)"
-      #   "1d"  = "rate(1 day)"
-      # }
-
     }
   }
 }
