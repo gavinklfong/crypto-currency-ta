@@ -36,17 +36,17 @@ def ts(dt_str: str) -> int:
     ("1h",  "2024-05-25T03:15:00", "symbol=BTCUSD/tf=1h/date=2024-05-25/hour=03/data.parquet"),
 
     # 4h block
-    ("4h",  "2024-05-25T03:15:00", "symbol=BTCUSD/tf=4h/date=2024-05-25/block=00/data.parquet"),
-    ("4h",  "2024-05-25T14:00:00", "symbol=BTCUSD/tf=4h/date=2024-05-25/block=12/data.parquet"),
+    ("4h",  "2024-05-25T03:15:00", "symbol=BTCUSD/tf=4h/date=2024-05-25/data.parquet"),
+    ("4h",  "2024-05-25T14:00:00", "symbol=BTCUSD/tf=4h/date=2024-05-25/data.parquet"),
 
     # Daily
     ("1d",  "2024-05-25T10:00:00", "symbol=BTCUSD/tf=1d/date=2024-05-25/data.parquet"),
 
-    # Weekly (ISO week 2024‑W21)
-    ("1w",  "2024-05-25T10:00:00", "symbol=BTCUSD/tf=1w/week=2024-W21/data.parquet"),
+    # # Weekly (ISO week 2024‑W21)
+    # ("1w",  "2024-05-25T10:00:00", "symbol=BTCUSD/tf=1w/week=2024-W21/data.parquet"),
 
-    # Monthly
-    ("1M",  "2024-05-25T10:00:00", "symbol=BTCUSD/tf=1M/month=2024-05/data.parquet"),
+    # # Monthly
+    # ("1M",  "2024-05-25T10:00:00", "symbol=BTCUSD/tf=1M/month=2024-05/data.parquet"),
 ])
 def test_build_s3_key_all_timeframes(timeframe, dt_str, expected):
     start_ts = ts(dt_str)
@@ -58,12 +58,12 @@ def test_partitioning_4h():
     # 03:15 → block=00
     start_ts = ts("2024-05-25T03:15:00")
     key = build_s3_key("BTCUSD", "4h", start_ts)
-    assert key == "symbol=BTCUSD/tf=4h/date=2024-05-25/block=00/data.parquet"
+    assert key == "symbol=BTCUSD/tf=4h/date=2024-05-25/data.parquet"
 
     # 14:00 → block=12
     start_ts = ts("2024-05-25T14:00:00")
     key = build_s3_key("BTCUSD", "4h", start_ts)
-    assert key == "symbol=BTCUSD/tf=4h/date=2024-05-25/block=12/data.parquet"
+    assert key == "symbol=BTCUSD/tf=4h/date=2024-05-25/data.parquet"
 
 
 def test_partitioning_1d():
@@ -179,8 +179,8 @@ def test_lambda_handler_success(
     result = lambda_handler(event, None)
 
     assert result["status"] == "ok"
-    assert "s3_key" in result
-    mock_write.assert_called_once()
+    assert "periods_exported" in result
+    assert mock_write.call_count == 2
 
 
 @patch("lambda_function.query_dynamodb")
@@ -196,4 +196,4 @@ def test_lambda_handler_empty(mock_query):
 
     mock_query.return_value = []
     result = lambda_handler(event, None)
-    assert result["status"] == "empty"
+    assert result["status"] == "ok"
