@@ -19,7 +19,8 @@ on:
 jobs:
 
   build:
-    if: github.event_name == 'push'  # <-- only run build on code changes
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+
     runs-on: ubuntu-latest
 
     steps:
