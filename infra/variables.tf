@@ -86,26 +86,26 @@ variable "lambdas" {
   default = {
     fetch_market_data = {
       function_name = "fetch-market-data"
-      zip_path      = "../.package/deployment-fetch-market-data.zip"
+      zip_path      = "../.package/lambdas/deployment-fetch-market-data.zip"
       route_key     = "GET /trigger-fetch-market-data"
       timeframes    = ["1m"]
     }
 
     calculate_ta = {
       function_name = "calculate-ta"
-      zip_path      = "../.package/deployment-calculate-ta.zip"
+      zip_path      = "../.package/lambdas/deployment-calculate-ta.zip"
       timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
 
     aggregate_timeframe = {
       function_name = "aggregate-timeframe"
-      zip_path      = "../.package/deployment-aggregate-timeframe.zip"
+      zip_path      = "../.package/lambdas/deployment-aggregate-timeframe.zip"
       timeframes    = ["5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
 
     export-data-to-s3 = {
       function_name = "export-data-to-s3"
-      zip_path      = "../.package/deployment-export-data-to-s3.zip"
+      zip_path      = "../.package/lambdas/deployment-export-data-to-s3.zip"
       # timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
       timeframes = ["1m"]
       # Custom schedule overrides for export function:

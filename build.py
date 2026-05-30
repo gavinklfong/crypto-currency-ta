@@ -8,10 +8,10 @@ from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parent
-APP_DIR = ROOT / "app"
-BUILD_DIR = ROOT / ".build"
-PACKAGE_DIR = ROOT / ".package"
-HASH_DIR = ROOT / ".hashes"
+APP_DIR = ROOT / "app" / "lambdas" 
+BUILD_DIR = ROOT / ".build" / "lambdas" 
+PACKAGE_DIR = ROOT / ".package" / "lambdas" 
+HASH_DIR = ROOT / ".hashes" / "lambdas" 
 
 
 def run(cmd):
