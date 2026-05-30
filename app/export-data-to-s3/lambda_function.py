@@ -35,38 +35,40 @@ def query_dynamodb(symbol, timeframe, start_ts, end_ts):
     pk = f"PAIR#{symbol}"
     start_sk = f"TF#{timeframe}#TS#{start_ts}"
     end_sk = f"TF#{timeframe}#TS#{end_ts}"
-
+    
     items = []
     last_evaluated_key = None
-
+    
     while True:
-        if last_evaluated_key:
-            resp = table.query(
-                KeyConditionExpression="PK = :pk AND SK BETWEEN :start AND :end",
-                ExpressionAttributeValues={
-                    ":pk": pk,
-                    ":start": start_sk,
-                    ":end": end_sk
-                },
-                ExclusiveStartKey=last_evaluated_key
-            )
-        else:
-            resp = table.query(
-                KeyConditionExpression="PK = :pk AND SK BETWEEN :start AND :end",
-                ExpressionAttributeValues={
-                    ":pk": pk,
-                    ":start": start_sk,
-                    ":end": end_sk
-                }
-            )
-
-        items.extend(resp.get("Items", []))
-        last_evaluated_key = resp.get("LastEvaluatedKey")
+        response = perform_query(
+            pk=pk,
+            start_sk=start_sk,
+            end_sk=end_sk,
+            last_evaluated_key=last_evaluated_key
+        )
+        
+        items.extend(response.get("Items", []))
+        last_evaluated_key = response.get("LastEvaluatedKey")
         
         if not last_evaluated_key:
             break
-
+    
     return items
+
+def perform_query(pk, start_sk, end_sk, last_evaluated_key=None):
+    query_params = {
+        "KeyConditionExpression": "PK = :pk AND SK BETWEEN :start AND :end",
+        "ExpressionAttributeValues": {
+            ":pk": pk,
+            ":start": start_sk,
+            ":end": end_sk
+        }
+    }
+    
+    if last_evaluated_key:
+        query_params["ExclusiveStartKey"] = last_evaluated_key
+    
+    return table.query(**query_params)
 
 # ------------------------------------------------------------
 # DataFrame preparation
@@ -121,10 +123,8 @@ def build_s3_key(symbol, timeframe, start_ts):
         return f"symbol={symbol}/tf={timeframe}/date={date_str}/hour={hour_str}/data.parquet"
 
     if timeframe == "4h":
-        block_hour = (dt.hour // 4) * 4
-        block_str = f"{block_hour:02d}"
         date_str = dt.strftime("%Y-%m-%d")
-        return f"symbol={symbol}/tf=4h/date={date_str}/block={block_str}/data.parquet"
+        return f"symbol={symbol}/tf=4h/date={date_str}/data.parquet"
 
     if timeframe == "1d":
         date_str = dt.strftime("%Y-%m-%d")
@@ -172,36 +172,102 @@ def get_timeframe_range(timeframe: str, now: datetime = None) -> tuple:
     - For 1m, 5m, 15m, 30m, 1h:
       * end_ts = last minute of previous hour (HH:59:59)
       * start_ts = end_ts - 2 hours
+      For example, if now is 2024-05-25 14:30:00 UTC:
+        - end_ts = 2024-05-25 13:59:59 UTC
+        - start_ts = 2024-05-25 11:00:00 UTC
     
-    - For 4h, 1d:
+    - For 4h:
       * end_ts = last minute of previous day (23:59:59)
-      * start_ts = end_ts - 1 day
+      * start_ts = start of that day (00:00:00)
+        For example, if now is 2024-05-25 14:30:00 UTC:
+        - end_ts = 2024-05-24 23:59:59 UTC
+        - start_ts = 2024-05-24 00:00:00 UTC
+      
+    - For 1d:
+      * end_ts = last minute of previous day (23:59:59)
+      * start_ts = start of end_ts - 1 day (00:00:00)
+        For example, if now is 2024-05-25 14:30:00 UTC:
+        - end_ts = 2024-05-24 23:59:59 UTC
+        - start_ts = 2024-05-23 00:00:00 UTC
     """
     if now is None:
         now = datetime.now(timezone.utc)
+        print(f"Current UTC time: {now.isoformat()}")
     
     if timeframe in ["1m", "5m", "15m", "30m", "1h"]:
         # End at last minute of previous hour
         end = (now - timedelta(hours=1)).replace(minute=59, second=59, microsecond=0)
         # Start 2 hours before end
-        start = end - timedelta(hours=2)
+        start = (end - timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
     
     elif timeframe == "4h":
         # End at last minute of previous day
         end = (now - timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=0)
         # Start 1 day before end
-        start = end - timedelta(days=1)
+        start = end.replace(hour=0, minute=0, second=0, microsecond=0)
     
     elif timeframe == "1d":
         # End at last minute of previous day
         end = (now - timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=0)
         # Start 1 day before end
-        start = end - timedelta(days=1)
-    
+        start = (end - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
     else:
         raise ValueError(f"Unsupported timeframe: {timeframe}")
     
     return int(start.timestamp()), int(end.timestamp())
+
+
+def split_time_period(start_ts, end_ts, timeframe):
+    # Convert timestamps to datetime objects
+    start_dt = datetime.fromtimestamp(start_ts)
+    end_dt = datetime.fromtimestamp(end_ts)
+    
+    # Define time unit and interval based on timeframe
+    if timeframe in ['1m', '5m', '15m', '30m', '1h']:
+        # For 1-hour, 5-min, 15-min, and 30-min intervals, use hourly intervals
+        time_unit = timedelta(hours=1)
+    elif timeframe == '4h':
+        # For 4-hour intervals, use daily intervals
+        time_unit = timedelta(days=1)
+    elif timeframe in ['1d']:
+        # For daily intervals, use daily intervals
+        time_unit = timedelta(days=1)
+    else:
+        raise ValueError("Unsupported timeframe")
+    
+    # Initialize result list
+    time_periods = []
+    
+    # Generate time periods
+    current_start = start_dt
+    while current_start < end_dt:
+        current_end = min(current_start + time_unit - timedelta(seconds=1), end_dt)
+        time_periods.append({
+            'start_ts': int(current_start.timestamp()),
+            'end_ts': int(current_end.timestamp())
+        })
+        current_start += time_unit
+    
+    return time_periods
+
+def export_data_to_s3(symbol, timeframe, start_ts, end_ts):
+    log_info("Starting export time period", symbol=symbol, timeframe=timeframe, 
+             start_ts=datetime.fromtimestamp(start_ts).isoformat(), 
+             end_ts=datetime.fromtimestamp(end_ts).isoformat())
+
+    items = query_dynamodb(symbol, timeframe, start_ts, end_ts)
+    if not items:
+        log_info("No data found", symbol=symbol, timeframe=timeframe)
+        return {"status": "empty"}
+
+    df = prepare_dataframe(items)
+    buffer = dataframe_to_parquet_buffer(df)
+    s3_key = build_s3_key(symbol, timeframe, start_ts)
+
+    write_to_s3(buffer, s3_key)
+
+    log_info("Export completed", symbol=symbol, timeframe=timeframe, s3_key=s3_key)
 
 # ------------------------------------------------------------
 # Main Lambda Handler
@@ -230,17 +296,10 @@ def lambda_handler(event, context):
              start_ts=datetime.fromtimestamp(start_ts).isoformat(), 
              end_ts=datetime.fromtimestamp(end_ts).isoformat())
 
-    items = query_dynamodb(symbol, timeframe, start_ts, end_ts)
-    if not items:
-        log_info("No data found", symbol=symbol, timeframe=timeframe)
-        return {"status": "empty"}
+    split_time_periods = split_time_period(start_ts, end_ts, timeframe)
 
-    df = prepare_dataframe(items)
-    buffer = dataframe_to_parquet_buffer(df)
-    s3_key = build_s3_key(symbol, timeframe, start_ts)
+    for period in split_time_periods:
+        export_data_to_s3(symbol, timeframe, period['start_ts'], period['end_ts'])
 
-    write_to_s3(buffer, s3_key)
-
-    log_info("Export completed", symbol=symbol, timeframe=timeframe, s3_key=s3_key)
-
-    return {"status": "ok", "s3_key": s3_key}
+    return {"status": "ok", "symbol": symbol, "timeframe": timeframe, 
+            "periods_exported": len(split_time_periods)}
