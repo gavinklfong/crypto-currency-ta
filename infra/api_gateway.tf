@@ -2,7 +2,7 @@
 # It also sets up the necessary permissions for Lambda to be invoked by API Gateway.
 locals {
   lambdas_with_routes = {
-    for k, v in var.lambdas :
+    for k, v in var.scheduled_lambdas :
     k => v
     if try(v.route_key, null) != null
   }
@@ -26,7 +26,7 @@ resource "aws_apigatewayv2_integration" "integration" {
 
   api_id                 = aws_apigatewayv2_api.http_api.id
   integration_type       = "AWS_PROXY"
-  integration_uri        = aws_lambda_function.lambda[each.key].invoke_arn
+  integration_uri        = aws_lambda_function.scheduled_lambda[each.key].invoke_arn
   payload_format_version = "2.0"
 }
 
@@ -70,7 +70,7 @@ resource "aws_lambda_permission" "allow_apigw" {
 
   statement_id  = "AllowAPIGatewayInvoke-${each.key}"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.lambda[each.key].function_name
+  function_name = aws_lambda_function.scheduled_lambda[each.key].function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*/*"
 }

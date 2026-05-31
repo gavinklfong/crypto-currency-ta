@@ -1,7 +1,7 @@
 locals {
   # 1. Build schedule maps for each Lambda by merging global schedules with function-specific overrides
   function_schedule_maps = {
-    for lambda_key, lambda_config in var.lambdas : lambda_key => merge(
+    for lambda_key, lambda_config in var.scheduled_lambdas : lambda_key => merge(
       var.timeframe_schedules,
       lambda_config.schedule_overrides
     )
@@ -10,7 +10,7 @@ locals {
   # 2. Generate every combination of Lambda x Symbol x Timeframe
   #    Each target gets the schedule expression specific to that Lambda
   raw_targets = flatten([
-    for lambda_key, lambda_config in var.lambdas : [
+    for lambda_key, lambda_config in var.scheduled_lambdas : [
       for symbol in var.symbols : [
         for tf in lambda_config.timeframes : {
           target_key   = "${lambda_key}-${symbol}-${tf}"
@@ -103,7 +103,7 @@ resource "aws_cloudwatch_event_target" "lambda_target" {
   # Use the target_to_rule_map to find the correct rule for this target
   rule      = aws_cloudwatch_event_rule.schedule[local.target_to_rule_map[each.key]].name
   target_id = each.key
-  arn       = aws_lambda_function.lambda[each.value.lambda_key].arn
+  arn       = aws_lambda_function.scheduled_lambda[each.value.lambda_key].arn
 
   input = jsonencode(each.value.event_input)
 }
@@ -114,7 +114,7 @@ resource "aws_lambda_permission" "allow_cloudwatch" {
 
   statement_id  = "AllowEventBridge-${each.key}"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.lambda[each.value.lambda_key].function_name
+  function_name = aws_lambda_function.scheduled_lambda[each.value.lambda_key].function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.schedule[local.target_to_rule_map[each.key]].arn
 }

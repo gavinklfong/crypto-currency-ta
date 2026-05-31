@@ -1,6 +1,6 @@
 locals {
   fifo_queues = var.fifo_queues
-  lambdas     = var.lambdas
+  lambdas     = var.scheduled_lambdas
 }
 
 # -----------------------------
@@ -42,7 +42,7 @@ resource "aws_lambda_event_source_mapping" "fifo_trigger" {
   for_each = local.fifo_queues
 
   event_source_arn = aws_sqs_queue.fifo[each.key].arn
-  function_name    = aws_lambda_function.lambda[each.key].arn
+  function_name    = aws_lambda_function.scheduled_lambda[each.key].arn
   batch_size       = 1
   enabled          = true
 }

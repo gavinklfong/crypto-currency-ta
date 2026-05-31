@@ -1,12 +1,9 @@
-locals {
-  lambda_queue_map = {
-    for key, _ in var.fifo_queues :
-    key => aws_sqs_queue.fifo[key].url
-  }
-}
+########################################
+# Lambda with schedules Functions
+########################################
 
-resource "aws_lambda_function" "lambda_controller" {
-  for_each = var.lambda_controllers
+resource "aws_lambda_function" "scheduled_lambda" {
+  for_each = var.scheduled_lambdas
 
   function_name = each.value.function_name
   handler       = "lambda_function.lambda_handler"
@@ -22,10 +19,4 @@ resource "aws_lambda_function" "lambda_controller" {
     for layer_name in each.value.layers :
     aws_lambda_layer_version.layers[layer_name].arn
   ]
-
-  environment {
-    variables = {
-      QUEUE_MAP = jsonencode(local.lambda_queue_map)
-    }
-  }
 }

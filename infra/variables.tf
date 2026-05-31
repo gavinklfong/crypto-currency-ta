@@ -103,7 +103,7 @@ variable "layers" {
   }
 }
 
-variable "lambda_controllers" {
+variable "lambdas" {
   description = "Lambda configurations"
   type = map(object({
     function_name = string
@@ -121,7 +121,7 @@ variable "lambda_controllers" {
   }
 }
 
-variable "lambdas" {
+variable "scheduled_lambdas" {
   description = "Lambda configurations with timeframe subscriptions and optional schedule overrides per function"
   type = map(object({
     function_name      = string
