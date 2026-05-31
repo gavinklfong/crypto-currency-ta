@@ -120,7 +120,8 @@ variable "lambdas" {
     "fetch-market-data" = {
       function_name = "fetch-market-data"
       zip_path      = "../build/package/lambdas/fetch-market-data.zip"
-      timeframes    = ["1m"]
+      # route_key     = "GET /trigger-fetch-market-data"
+      timeframes = ["1m"]
     }
 
     "calculate-ta" = {
