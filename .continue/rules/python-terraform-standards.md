@@ -2,12 +2,13 @@
 
 ## Architecture Context
 - This repository manages a serverless backend.
-- The Python codebase in `/app` houses AWS Lambda processing functions.
+- The Python codebase in `/app/lambdas` houses AWS Lambda processing functions.
+- The Python codebase in `/app/layers` houses AWS Lambda layers
 - The Terraform infrastructure in `/infra` manages AWS resources, IAM permissions, and deployment pipelines.
 - CI/CD pipeline makes use of GitHub Actions with the workflow definition in `.github/workflows/deploy.yaml`
 - The CI/CD pipeline makes use of the following utility scripts:
   - `build.py`: A utility script to build and package each lambda function in `/app`
-  - `run_tests.py`: a utility script to run automated tests of each lambda function in `/app`
+  - `run_tests.py`: a utility script to run automated tests of each lambda function in `/app/lambdas`
 
 ## Coding & Tooling Standards
 - **Python:** Use Python 3.11+. Focus on memory-optimized, vectorized Pandas code. Keep packaging footprints minimal to respect AWS Lambda layer zip deployment limits.

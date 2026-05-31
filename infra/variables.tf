@@ -52,6 +52,16 @@ variable "extra_routes" {
   }
 }
 
+variable "fifo_queues" {
+  description = "Mapping of lambda functions to FIFO SQS queue names"
+  type        = map(string)
+  default = {
+    "fetch_market_data"   = "crypto-currency-ta-fetch-market-data.fifo"
+    "calculate-ta"        = "crypto-currency-ta-calculate-ta.fifo"
+    "aggregate-timeframe" = "crypto-currency-ta-aggregate-timeframe.fifo"
+    "export-data-to-s3"   = "crypto-currency-ta-export-data-to-s3.fifo"
+  }
+}
 
 variable "symbols" {
   description = "List of trading symbols to track"
@@ -106,26 +116,32 @@ variable "lambdas" {
     schedule_overrides = optional(map(string), {})
   }))
   default = {
-    fetch_market_data = {
-      function_name = "fetch-market-data"
+    "fetch_market_data" = {
+      function_name = "fetch_market_data"
       zip_path      = "../build/package/lambdas/fetch-market-data.zip"
       route_key     = "GET /trigger-fetch-market-data"
       timeframes    = ["1m"]
     }
 
-    calculate_ta = {
+    # "fetch-market-data" = {
+    #   function_name = "fetch-market-data"
+    #   zip_path      = "../build/package/lambdas/fetch-market-data.zip"
+    #   timeframes    = ["1m"]
+    # }
+
+    "calculate-ta" = {
       function_name = "calculate-ta"
       zip_path      = "../build/package/lambdas/calculate-ta.zip"
       timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
 
-    aggregate_timeframe = {
+    "aggregate-timeframe" = {
       function_name = "aggregate-timeframe"
       zip_path      = "../build/package/lambdas/aggregate-timeframe.zip"
       timeframes    = ["5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
 
-    export-data-to-s3 = {
+    "export-data-to-s3" = {
       function_name = "export-data-to-s3"
       zip_path      = "../build/package/lambdas/export-data-to-s3.zip"
       layers        = ["pandas", "pyarrow"]
