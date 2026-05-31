@@ -145,7 +145,7 @@ def lambda_handler(event, context):
             events.put_events(
                 Entries=[{
                     "Source": "rerun-fetch-market-data",
-                    "DetailType": "fetch-market-data",
+                    "DetailType": "fetch-more-market-data",
                     "Detail": json.dumps({
                         "symbol": symbol,
                         "start_ts": last_timestamp,
