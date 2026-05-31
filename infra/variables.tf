@@ -103,6 +103,24 @@ variable "layers" {
   }
 }
 
+variable "lambda_controllers" {
+  description = "Lambda configurations"
+  type = map(object({
+    function_name = string
+    zip_path      = string
+    layers        = optional(list(string), [])
+    timeout       = optional(number, 30)
+    memory_size   = optional(number)
+    route_key     = optional(string)
+  }))
+  default = {
+    "rerun-controller" = {
+      function_name = "rerun-controller"
+      zip_path      = "../build/package/lambdas/rerun-controller.zip"
+    }
+  }
+}
+
 variable "lambdas" {
   description = "Lambda configurations with timeframe subscriptions and optional schedule overrides per function"
   type = map(object({

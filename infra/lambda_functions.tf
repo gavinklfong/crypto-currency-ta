@@ -98,7 +98,6 @@ resource "aws_lambda_function" "lambda" {
 
   role = aws_iam_role.lambda_exec.arn
 
-  # Convert layer names → ARNs
   layers = [
     for layer_name in each.value.layers :
     aws_lambda_layer_version.layers[layer_name].arn
