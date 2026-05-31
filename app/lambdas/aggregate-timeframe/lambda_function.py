@@ -276,6 +276,66 @@ def process_pair_timeframe(pair: str, timeframe: str, current_time: int):
     
     return processed_count
 
+
+def process_pair_timeframe_range(pair: str, timeframe: str, start_ts: int, end_ts: int):
+    """Process aggregation for a specific pair/timeframe over an explicit time range."""
+    timeframe_seconds = TIMEFRAMES[timeframe]
+
+    # Fetch 1-minute candles
+    candles_1m = fetch_1m_candles(pair, start_ts, end_ts)
+
+    log_info(
+        "Fetched 1-minute candles (range mode)",
+        pair=pair,
+        timeframe=timeframe,
+        start_ts=start_ts,
+        end_ts=end_ts,
+        count=len(candles_1m)
+    )
+
+    if not candles_1m:
+        log_info(
+            "No 1-minute candles found in range",
+            pair=pair,
+            timeframe=timeframe,
+            start_ts=start_ts,
+            end_ts=end_ts
+        )
+        return 0
+
+    # Group candles by aggregation bucket
+    buckets = {}
+
+    for candle in candles_1m:
+        ts = extract_timestamp_from_sk(candle["SK"])
+        if ts is None:
+            continue
+
+        bucket_ts = get_candle_timestamp(ts, timeframe_seconds)
+
+        if bucket_ts not in buckets:
+            buckets[bucket_ts] = []
+
+        buckets[bucket_ts].append(candle)
+
+    processed_count = 0
+
+    log_info(
+        "Processing aggregated candles (range mode)",
+        pair=pair,
+        timeframe=timeframe,
+        buckets_count=len(buckets),
+    )
+
+    for bucket_ts in sorted(buckets.keys()):
+        aggregated = aggregate_candles(buckets[bucket_ts])
+        if aggregated:
+            write_aggregated_candle(pair, timeframe, bucket_ts, aggregated)
+            processed_count += 1
+
+    return processed_count
+
+
 def lambda_handler(event, context):
     try:
         log_info("Lambda triggered", event=json.dumps(event))
@@ -288,12 +348,12 @@ def lambda_handler(event, context):
 
         symbol = event_data.get("symbol", DEFAULT_SYMBOL)
         timeframe = event_data.get("timeframe", DEFAULT_TIMEFRAME)
+        start_ts = event_data.get("start_ts")
+        end_ts = event_data.get("end_ts")
 
+        # Basic validation
         if not symbol:
             raise ValueError("No symbol provided in event")
-
-        if not timeframe:
-            raise ValueError("No timeframe provided in event")
 
         if timeframe not in TIMEFRAMES:
             raise ValueError(f"Invalid timeframe: {timeframe}")
@@ -301,13 +361,37 @@ def lambda_handler(event, context):
         if timeframe == "1m":
             raise ValueError("1m timeframe cannot be aggregated")
 
+        # -----------------------------
+        # RANGE MODE: start_ts + end_ts provided
+        # -----------------------------
+        if start_ts is not None and end_ts is not None:
+            processed = process_pair_timeframe_range(
+                symbol,
+                timeframe,
+                int(start_ts),
+                int(end_ts)
+            )
+
+            return {
+                "status": "success",
+                "mode": "range",
+                "symbol_processed": symbol,
+                "timeframe_processed": timeframe,
+                "start_ts": start_ts,
+                "end_ts": end_ts,
+                "candles_written": processed
+            }
+
+        # -----------------------------
+        # DEFAULT MODE: use existing logic
+        # -----------------------------
         current_time = int(datetime.now(timezone.utc).timestamp())
 
-        # Process ONLY the requested timeframe
         processed = process_pair_timeframe(symbol, timeframe, current_time)
 
         return {
             "status": "success",
+            "mode": "lookback",
             "current_time": current_time,
             "symbol_processed": symbol,
             "timeframe_processed": timeframe,

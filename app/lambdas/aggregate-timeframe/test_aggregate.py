@@ -291,3 +291,84 @@ class TestLambdaHandler:
         event = {"detail": {"symbol": "BTCUSD"}}
         result = lambda_handler(event, None)
         assert result["candles_written"] == 1
+
+    @patch("lambda_function.process_pair_timeframe_range")
+    @patch("lambda_function.process_pair_timeframe")
+    def test_lambda_handler_with_explicit_time_range(self, mock_default, mock_range):
+        mock_range.return_value = 7
+
+        event = {
+            "detail": {
+                "symbol": "BTCUSD",
+                "timeframe": "5m",
+                "start_ts": 1609459200,
+                "end_ts": 1609462800
+            }
+        }
+
+        result = lambda_handler(event, None)
+
+        # Should use range mode
+        mock_range.assert_called_once_with(
+            "BTCUSD",
+            "5m",
+            1609459200,
+            1609462800
+        )
+
+        # Default processor must NOT be called
+        mock_default.assert_not_called()
+
+        assert result["status"] == "success"
+        assert result["mode"] == "range"
+        assert result["symbol_processed"] == "BTCUSD"
+        assert result["timeframe_processed"] == "5m"
+        assert result["start_ts"] == 1609459200
+        assert result["end_ts"] == 1609462800
+        assert result["candles_written"] == 7
+
+class TestProcessPairTimeframeRange:
+    @patch("lambda_function.write_aggregated_candle")
+    @patch("lambda_function.aggregate_candles")
+    @patch("lambda_function.fetch_1m_candles")
+    def test_process_pair_timeframe_range_basic(
+        self, mock_fetch, mock_agg, mock_write
+    ):
+        # Arrange: 3 one‑minute candles across two buckets (5m timeframe)
+        mock_fetch.return_value = [
+            {"SK": "TF#1m#TS#1609459200", "timestamp": 1609459200,
+             "open": 100, "high": 101, "low": 99, "close": 100.5, "volume": 100},
+            {"SK": "TF#1m#TS#1609459260", "timestamp": 1609459260,
+             "open": 100.5, "high": 102, "low": 100, "close": 101, "volume": 120},
+            {"SK": "TF#1m#TS#1609459500", "timestamp": 1609459500,
+             "open": 101, "high": 103, "low": 100, "close": 102, "volume": 150},
+        ]
+
+        # Each bucket returns a dummy aggregated candle
+        mock_agg.return_value = {"open": 1, "high": 2, "low": 3, "close": 4, "volume": 5}
+
+        # Act
+        from lambda_function import process_pair_timeframe_range
+        processed = process_pair_timeframe_range(
+            "BTCUSD",
+            "5m",
+            1609459200,
+            1609459600
+        )
+
+        # Assert: fetch called with correct range
+        mock_fetch.assert_called_once_with("BTCUSD", 1609459200, 1609459600)
+
+        # Two buckets expected: 1609459200 and 1609459500
+        assert mock_write.call_count == 2
+
+        # Validate write calls
+        calls = mock_write.call_args_list
+        bucket_ts_1 = calls[0][0][2]
+        bucket_ts_2 = calls[1][0][2]
+
+        assert bucket_ts_1 == 1609459200
+        assert bucket_ts_2 == 1609459500
+
+        # Aggregation count returned
+        assert processed == 2
