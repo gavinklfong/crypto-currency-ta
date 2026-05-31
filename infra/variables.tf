@@ -45,10 +45,10 @@ variable "extra_routes" {
     lambda    = string
   }))
   default = {
-    root = {
-      route_key = "GET /"
-      lambda    = "fetch_market_data"
-    }
+    # root = {
+    #   route_key = "GET /"
+    #   lambda    = "fetch_market_data"
+    # }
   }
 }
 
@@ -56,7 +56,7 @@ variable "fifo_queues" {
   description = "Mapping of lambda functions to FIFO SQS queue names"
   type        = map(string)
   default = {
-    "fetch_market_data"   = "crypto-currency-ta-fetch-market-data.fifo"
+    "fetch-market-data"   = "crypto-currency-ta-fetch-market-data.fifo"
     "calculate-ta"        = "crypto-currency-ta-calculate-ta.fifo"
     "aggregate-timeframe" = "crypto-currency-ta-aggregate-timeframe.fifo"
     "export-data-to-s3"   = "crypto-currency-ta-export-data-to-s3.fifo"
@@ -116,18 +116,12 @@ variable "lambdas" {
     schedule_overrides = optional(map(string), {})
   }))
   default = {
-    "fetch_market_data" = {
-      function_name = "fetch_market_data"
+
+    "fetch-market-data" = {
+      function_name = "fetch-market-data"
       zip_path      = "../build/package/lambdas/fetch-market-data.zip"
-      route_key     = "GET /trigger-fetch-market-data"
       timeframes    = ["1m"]
     }
-
-    # "fetch-market-data" = {
-    #   function_name = "fetch-market-data"
-    #   zip_path      = "../build/package/lambdas/fetch-market-data.zip"
-    #   timeframes    = ["1m"]
-    # }
 
     "calculate-ta" = {
       function_name = "calculate-ta"
