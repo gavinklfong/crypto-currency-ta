@@ -292,10 +292,9 @@ def calculate_range(pair, timeframe, start_ts, end_ts):
     index_by_ts = {extract_timestamp_from_sk(i["SK"]): idx for idx, i in enumerate(window)}
 
     # ----------------------------------------------------
-    # 3. Build batch write items
+    # 3. Update TA columns for each candle
     # ----------------------------------------------------
-    serializer = boto3.dynamodb.types.TypeSerializer()
-    batch_items = []
+    processed = 0
 
     for candle in candles:
         ts = extract_timestamp_from_sk(candle["SK"])
@@ -307,44 +306,15 @@ def calculate_range(pair, timeframe, start_ts, end_ts):
 
         ta = compute_all_ta(closes)
 
-        # Merge TA into item - flatten individual TA attributes
-        new_item = dict(candle)
-        new_item.update({
-            "ta_rsi14": ta.get("ta_rsi14"),
-            "ta_macd": ta.get("ta_macd"),
-            "ta_ema20": ta.get("ta_ema20"),
-            "updated_at": ta.get("updated_at")
-        })
-
-        marshalled = serializer.serialize(new_item)["M"]
-
-        batch_items.append({
-            "PutRequest": {
-                "Item": marshalled
-            }
-        })
-
-    # ----------------------------------------------------
-    # 4. Batch write in chunks of 25
-    # ----------------------------------------------------
-    client = boto3.client("dynamodb")
-
-    for i in range(0, len(batch_items), 25):
-        chunk = batch_items[i:i+25]
-        request = {TABLE_NAME: chunk}
-
-        while True:
-            resp = client.batch_write_item(RequestItems=request)
-            unprocessed = resp.get("UnprocessedItems", {})
-            if not unprocessed:
-                break
-            request = unprocessed
+        # Update TA columns using dedicated function
+        write_ta_to_dynamodb(pair, timeframe, ts, ta)
+        processed += 1
 
     return {
         "pair": pair,
         "timeframe": timeframe,
         "start_ts": start_ts,
         "end_ts": end_ts,
-        "processed": len(batch_items),
-        "status": "range recalculated (batch mode)"
+        "processed": processed,
+        "status": "range recalculated (update mode)"
     }
