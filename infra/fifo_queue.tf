@@ -11,7 +11,7 @@ resource "aws_sqs_queue" "fifo" {
 
   name                        = each.value
   fifo_queue                  = true
-  content_based_deduplication = false
+  content_based_deduplication = true
 
   # Dynamically set based on lambda timeout
   visibility_timeout_seconds = (

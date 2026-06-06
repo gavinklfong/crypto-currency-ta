@@ -8,8 +8,8 @@ import boto3
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Initialize the SQS client
-sqs = boto3.client('sqs')
+# Initialize the EventBridge client
+events = boto3.client("events")
 
 DEFAULT_SYMBOLS = ["XXBTZUSD", "XETHZUSD"]
 TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
@@ -20,13 +20,7 @@ def log_info(message, **kwargs):
 def log_error(message, **kwargs):
     logger.error(f"{message} | {json.dumps(kwargs)}")
 
-def get_queue_map():
-    return json.loads(os.environ["QUEUE_MAP"])
-
 def validateInput(target, symbol, timeframe, start_date, end_date):
-    if target is not None and not get_queue_map().get(target):
-        raise ValueError("Invalid target: {target}. Must be one of {list(get_queue_map().keys())}")
-
     if symbol is not None and not isinstance(symbol, str):
         raise ValueError("Symbol must be a string")
 
@@ -66,22 +60,26 @@ def process_symbol_timeframe(target, symbol, timeframe, start_date, end_date):
     log_info("Processing symbol", target=target, symbol=symbol, timeframe=timeframe)
     chunks = split_date_range_into_chunks(start_date, end_date)
     for chunk_start, chunk_end in chunks:
-        send_sqs_message(target, symbol, timeframe, start_date, end_date, chunk_start, chunk_end)
+        send_event(target, symbol, timeframe, start_date, end_date, chunk_start, chunk_end)
 
-def send_sqs_message(target, symbol, timeframe, start_date, end_date, start_ts, end_ts):
-    log_info("Sending SQS message for chunk", target=target, symbol=symbol, 
+def send_event(target, symbol, timeframe, start_date, end_date, start_ts, end_ts):
+    log_info("Sending event for chunk", target=target, symbol=symbol, 
              timeframe=timeframe, 
              chunk_start=start_ts.isoformat(), chunk_end=end_ts.isoformat())
-    sqs.send_message(
-        QueueUrl=get_queue_map().get(target),
-        MessageGroupId=f"{symbol}#{timeframe}",
-        MessageDeduplicationId=f"{start_date}-{end_date}",
-        MessageBody=json.dumps({
-            "symbol": symbol,
-            "timeframe": timeframe,
-            "start_ts": start_ts,
-            "end_ts": end_ts
-        })
+    events.put_events(
+        Entries=[{
+            "Source": "backfill.controller",
+            "DetailType": "backfill.request",
+            "Detail": json.dumps({
+                "target": target,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "start_ts": start_ts.timestamp(),
+                "end_ts": end_ts.timestamp(),
+                "message_group_id": f"{symbol}#{timeframe}",
+                "message_dedupe_id": f"{start_date}-{end_date}"
+            })
+        }]
     )
 
 
@@ -109,7 +107,7 @@ def lambda_handler(event, context):
         symbols = [symbol] if symbol else DEFAULT_SYMBOLS
         timeframes = [timeframe] if timeframe else TIMEFRAMES
 
-        # for each symbol, split date range of start date to end date into 1 day chunks, and send a message to SQS for each chunk
+        # for each symbol, split date range of start date to end date into 1 day chunks, and send a message to EventBridge for each chunk
         for symbol in symbols:
             for timeframe in timeframes:
                 process_symbol_timeframe(target, symbol, timeframe, start_date, end_date)

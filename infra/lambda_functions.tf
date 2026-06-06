@@ -22,10 +22,4 @@ resource "aws_lambda_function" "lambda" {
     for layer_name in each.value.layers :
     aws_lambda_layer_version.layers[layer_name].arn
   ]
-
-  environment {
-    variables = {
-      QUEUE_MAP = jsonencode(local.lambda_queue_map)
-    }
-  }
 }
