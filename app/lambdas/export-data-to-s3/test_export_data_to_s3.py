@@ -109,7 +109,10 @@ def sample_items():
             "vwap": "104.1",
             "timeframe_minutes": "1",
             "created_at": "2024-01-01T00:00:00Z",
-            "ta": {"rsi": 55}
+            "ta_rsi14": 55,
+            "ta_macd": {"line": 0.5, "signal": 0.3, "histogram": 0.2},
+            "ta_ema20": 104.5,
+            "updated_at": "2024-01-01T00:00:00Z"
         }
     ]
 

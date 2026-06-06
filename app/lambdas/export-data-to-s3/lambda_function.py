@@ -80,7 +80,8 @@ def prepare_dataframe(items):
         "open", "high", "low", "close",
         "ha_open", "ha_high", "ha_low", "ha_close",
         "median_price", "typical_price", "vwap",
-        "volume", "timeframe_minutes"
+        "volume", "timeframe_minutes",
+        "ta_rsi14", "ta_ema20"
     ]
 
     for col in numeric_cols:
@@ -89,7 +90,7 @@ def prepare_dataframe(items):
 
     expected_cols = [
         "close", "created_at", "ha_close", "ha_high", "ha_low", "ha_open",
-        "high", "low", "median_price", "open", "pair", "ta", "timeframe",
+        "high", "low", "median_price", "open", "pair", "ta_rsi14", "ta_macd", "ta_ema20", "updated_at", "timeframe",
         "timeframe_minutes", "timestamp", "typical_price", "volume", "vwap"
     ]
 

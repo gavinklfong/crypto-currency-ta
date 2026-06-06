@@ -111,13 +111,13 @@ def compute_all_ta(closes):
     ema20 = compute_ema(closes[-20:], 20) if len(closes) >= 20 else None
 
     return {
-        "rsi14": D(rsi),
-        "macd": {
+        "ta_rsi14": D(rsi),
+        "ta_macd": {
             "line": D(macd_line),
             "signal": D(signal_line),
             "histogram": D(histogram)
         },
-        "ema20": D(ema20),
+        "ta_ema20": D(ema20),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
 
@@ -127,8 +127,13 @@ def write_ta_to_dynamodb(pair, timeframe, timestamp, ta):
 
     table.update_item(
         Key={"PK": pk, "SK": sk},
-        UpdateExpression="SET ta = :ta",
-        ExpressionAttributeValues={":ta": ta}
+        UpdateExpression="SET ta_rsi14 = :rsi, ta_macd = :macd, ta_ema20 = :ema, updated_at = :ts",
+        ExpressionAttributeValues={
+            ":rsi": ta.get("ta_rsi14"),
+            ":macd": ta.get("ta_macd"),
+            ":ema": ta.get("ta_ema20"),
+            ":ts": ta.get("updated_at")
+        }
     )
 
 # ============================================================
@@ -235,13 +240,7 @@ def calculate_single(event):
             log_info("Skipping TA update due to insufficient history for this timestamp", timestamp=ts)
             continue
 
-        pk = f"PAIR#{pair}"
-        sk = f"TF#{timeframe}#TS#{ts}"
-        table.update_item(
-            Key={"PK": pk, "SK": sk},
-            UpdateExpression="SET ta = :ta",
-            ExpressionAttributeValues={":ta": ta}
-        )
+        write_ta_to_dynamodb(pair, timeframe, ts, ta)
         # log_info("TA written", pair=pair, timeframe=timeframe, timestamp=ts)
         results.append({"timestamp": ts, "ta": ta})
 
@@ -308,9 +307,14 @@ def calculate_range(pair, timeframe, start_ts, end_ts):
 
         ta = compute_all_ta(closes)
 
-        # Merge TA into item
+        # Merge TA into item - flatten individual TA attributes
         new_item = dict(candle)
-        new_item["ta"] = ta
+        new_item.update({
+            "ta_rsi14": ta.get("ta_rsi14"),
+            "ta_macd": ta.get("ta_macd"),
+            "ta_ema20": ta.get("ta_ema20"),
+            "updated_at": ta.get("updated_at")
+        })
 
         marshalled = serializer.serialize(new_item)["M"]
 

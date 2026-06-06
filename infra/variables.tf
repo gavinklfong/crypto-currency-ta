@@ -56,7 +56,6 @@ variable "fifo_queues" {
   description = "Mapping of lambda functions to FIFO SQS queue names"
   type        = map(string)
   default = {
-    "fetch-market-data"   = "crypto-currency-ta-fetch-market-data.fifo"
     "calculate-ta"        = "crypto-currency-ta-calculate-ta.fifo"
     "aggregate-timeframe" = "crypto-currency-ta-aggregate-timeframe.fifo"
     "export-data-to-s3"   = "crypto-currency-ta-export-data-to-s3.fifo"
@@ -117,6 +116,10 @@ variable "lambdas" {
     "rerun-controller" = {
       function_name = "rerun-controller"
       zip_path      = "../build/package/lambdas/rerun-controller.zip"
+    }
+    "rerun-fetch-market-data" = {
+      function_name = "rerun-fetch-market-data"
+      zip_path      = "../build/package/lambdas/rerun-fetch-market-data.zip"
     }
   }
 }
