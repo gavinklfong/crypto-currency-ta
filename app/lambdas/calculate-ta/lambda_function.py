@@ -376,9 +376,11 @@ def calculate_range(pair, timeframe, start_ts, end_ts):
         ta = compute_all_ta(closes)
 
         # Update TA columns using dedicated function
-        log_info("Writing TA to DynamoDB for candle in range", pair=pair, timeframe=timeframe, timestamp=ts)
+        # log_info("Writing TA to DynamoDB for candle in range", pair=pair, timeframe=timeframe, timestamp=ts)
         write_ta_to_dynamodb(pair, timeframe, ts, ta)
         processed += 1
+
+    log_info("Range TA calculation completed", pair=pair, timeframe=timeframe, start_ts=start_ts, end_ts=end_ts, processed=processed)
 
     return {
         "pair": pair,

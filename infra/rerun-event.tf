@@ -1,5 +1,8 @@
 resource "aws_sqs_queue" "eventbridge_dlq" {
   name = "eventbridge-dlq"
+
+  kms_master_key_id       = null
+  sqs_managed_sse_enabled = false
 }
 
 resource "aws_cloudwatch_event_rule" "backfill_rules" {
@@ -40,6 +43,7 @@ resource "aws_cloudwatch_event_target" "backfill_targets" {
       timeframe = "$.detail.timeframe"
       start_ts  = "$.detail.start_ts"
       end_ts    = "$.detail.end_ts"
+      event_id  = "$.id"
     }
 
     input_template = <<EOF
@@ -47,7 +51,8 @@ resource "aws_cloudwatch_event_target" "backfill_targets" {
   "symbol": "<symbol>",
   "timeframe": "<timeframe>",
   "start_ts": "<start_ts>",
-  "end_ts": "<end_ts>"
+  "end_ts": "<end_ts>",
+  "event_id": "<event_id>"
 }
 EOF
   }

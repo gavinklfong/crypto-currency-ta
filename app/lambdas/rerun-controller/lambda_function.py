@@ -31,10 +31,10 @@ def validateInput(target, symbol, timeframe, start_date, end_date):
 
     if target == "calculate-ta":
         valid_timeframes = CALCULATE_TA_TIMEFRAMES
-    elif target == "aggregate":
+    elif target == "aggregate-timeframe":
         valid_timeframes = AGGREGATE_TIMEFRAMES
     else:
-        raise ValueError(f"Invalid target: {target}. Must be 'calculate-ta' or 'aggregate'")
+        raise ValueError(f"Invalid target: {target}. Must be 'calculate-ta' or 'aggregate-timeframe'")
     
     if timeframe is not None and timeframe not in valid_timeframes:
         raise ValueError(f"Invalid timeframe: {timeframe}. Must be one of {valid_timeframes}")

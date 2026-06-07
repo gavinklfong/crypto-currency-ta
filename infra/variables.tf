@@ -108,7 +108,7 @@ variable "lambdas" {
     function_name = string
     zip_path      = string
     layers        = optional(list(string), [])
-    timeout       = optional(number, 30)
+    timeout       = optional(number, 600)
     memory_size   = optional(number)
     route_key     = optional(string)
   }))
@@ -130,7 +130,7 @@ variable "scheduled_lambdas" {
     function_name      = string
     zip_path           = string
     layers             = optional(list(string), [])
-    timeout            = optional(number, 30)
+    timeout            = optional(number, 600)
     memory_size        = optional(number)
     route_key          = optional(string)
     timeframes         = list(string)
@@ -161,7 +161,6 @@ variable "scheduled_lambdas" {
       function_name = "export-data-to-s3"
       zip_path      = "../build/package/lambdas/export-data-to-s3.zip"
       layers        = ["pandas", "pyarrow"]
-      timeout       = 120
       timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
       # Custom schedule overrides for export function:
       schedule_overrides = {

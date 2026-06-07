@@ -13,6 +13,9 @@ resource "aws_sqs_queue" "fifo" {
   fifo_queue                  = true
   content_based_deduplication = true
 
+  kms_master_key_id       = null
+  sqs_managed_sse_enabled = false
+
   # Dynamically set based on lambda timeout
   visibility_timeout_seconds = (
     lookup(local.lambdas[each.key], "timeout", 30) * 6
