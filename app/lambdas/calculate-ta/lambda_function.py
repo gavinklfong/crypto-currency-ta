@@ -328,7 +328,8 @@ def calculate_range(pair, timeframe, start_ts, end_ts):
     num_candles_in_range = len(candles)
     fetch_count = num_candles_in_range + TA_MIN_HISTORY
     window = fetch_last_n_candles(pair, timeframe, end_ts, n=fetch_count)
-    
+    log_info("Fetched window for range calculation", pair=pair, timeframe=timeframe, end_ts=end_ts, requested_count=fetch_count, actual_count=len(window))
+
     # Extract closes defensively
     closes_all, bad_items = extract_closes(window)
     if bad_items:
@@ -367,6 +368,7 @@ def calculate_range(pair, timeframe, start_ts, end_ts):
         idx = index_by_ts[ts]
         # Skip candles without sufficient prior history for TA (need TA_MIN_HISTORY items total)
         if idx < TA_MIN_HISTORY - 1:
+            log_info("Skipping candle in range due to insufficient history for TA", timestamp=ts, index_in_window=idx)
             continue
 
         closes = closes_all[: idx + 1]
@@ -374,6 +376,7 @@ def calculate_range(pair, timeframe, start_ts, end_ts):
         ta = compute_all_ta(closes)
 
         # Update TA columns using dedicated function
+        log_info("Writing TA to DynamoDB for candle in range", pair=pair, timeframe=timeframe, timestamp=ts)
         write_ta_to_dynamodb(pair, timeframe, ts, ta)
         processed += 1
 
