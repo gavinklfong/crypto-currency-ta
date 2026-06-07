@@ -68,9 +68,14 @@ def compute_macd(values, fast=12, slow=26, signal=9):
 
     macd_hist = []
     for i in range(len(values) - (slow + signal), len(values)):
+        if i <= 0:  # Skip if slice would be empty
+            continue
         ef = compute_ema(values[:i], fast)
         es = compute_ema(values[:i], slow)
         macd_hist.append(ef - es)
+
+    if not macd_hist:  # If no valid histogram entries, return None
+        return None, None, None
 
     signal_line = compute_ema(macd_hist, signal)
     histogram = macd_line - signal_line
@@ -82,22 +87,37 @@ def compute_macd(values, fast=12, slow=26, signal=9):
 # ============================================================
 
 def fetch_last_n_candles(pair, timeframe, timestamp, n=200):
-    """Fetch last N candles up to and including timestamp."""
+    """Fetch last N candles up to and including timestamp, with pagination support."""
     pk = f"PAIR#{pair}"
     sk_upper = f"TF#{timeframe}#TS#{timestamp}"
-
-    resp = table.query(
-        KeyConditionExpression="PK = :pk AND SK <= :sk_upper",
-        ExpressionAttributeValues={
-            ":pk": pk,
-            ":sk_upper": sk_upper
-        },
-        ScanIndexForward=False,
-        Limit=n,
-        ConsistentRead=False
-    )
-
-    return list(reversed(resp["Items"]))
+    
+    all_items = []
+    last_evaluated_key = None
+    
+    while len(all_items) < n:
+        query_params = {
+            "KeyConditionExpression": "PK = :pk AND SK <= :sk_upper",
+            "ExpressionAttributeValues": {
+                ":pk": pk,
+                ":sk_upper": sk_upper
+            },
+            "ScanIndexForward": False,
+            "Limit": n - len(all_items),  # Only fetch remaining items needed
+            "ConsistentRead": False
+        }
+        
+        if last_evaluated_key:
+            query_params["ExclusiveStartKey"] = last_evaluated_key
+        
+        resp = table.query(**query_params)
+        all_items.extend(resp.get("Items", []))
+        
+        last_evaluated_key = resp.get("LastEvaluatedKey")
+        if not last_evaluated_key:
+            break  # No more items to fetch
+    
+    # Return only the first n items, reversed to chronological order
+    return list(reversed(all_items[:n]))
 
 def extract_timestamp_from_sk(sk):
     """Extract integer timestamp from SK."""
@@ -144,27 +164,45 @@ def lambda_handler(event, context):
 
     log_info("Lambda triggered", event=json.dumps(event))
 
+    # Extract event data from different event sources
+    event_data = {}
+    
     # SQS event
     if "Records" in event:
         record = event["Records"][0]
         body = json.loads(record["body"])
-        
-        # EventBridge event is inside "detail"
-        event_data = body.get("detail", {})
+        event_data = body
+    # EventBridge event
+    elif "detail" in event:
+        event_data = event["detail"]
+    # Direct invocation
     else:
-        if "detail" in event:
-            event_data = event["detail"]    
-        else:
-            # Direct invocation (manual)
-            event_data = event
+        event_data = event
+
+    # Extract parameters
+    symbol = event_data.get("symbol")
+    timeframe = event_data.get("timeframe")
+    
+    # Handle both string and numeric types for timestamps
+    start_ts_raw = event_data.get("start_ts")
+    end_ts_raw = event_data.get("end_ts")
+    
+    start_ts = None
+    end_ts = None
+    
+    if start_ts_raw is not None:
+        start_ts = int(float(start_ts_raw))
+    
+    if end_ts_raw is not None:
+        end_ts = int(float(end_ts_raw))
 
     # Check if range calculation is requested
-    if "start_ts" in event_data and "end_ts" in event_data:
+    if start_ts is not None and end_ts is not None:
         return calculate_range(
-            event_data["symbol"],
-            event_data["timeframe"],
-            event_data["start_ts"],
-            event_data["end_ts"]
+            symbol,
+            timeframe,
+            start_ts,
+            end_ts
         )
 
     return calculate_single(event_data)
@@ -269,6 +307,8 @@ def calculate_range(pair, timeframe, start_ts, end_ts):
         ConsistentRead=False
     )
 
+    log_info("Fetched candles for range", pair=pair, timeframe=timeframe, start_ts=start_ts, end_ts=end_ts, count=len(resp["Items"]))
+
     candles = resp["Items"]
     if not candles:
         return {
@@ -279,18 +319,41 @@ def calculate_range(pair, timeframe, start_ts, end_ts):
             "status": "no candles found"
         }
 
-    # Extract timestamps
-    timestamps = [extract_timestamp_from_sk(i["SK"]) for i in candles]
-
     # ----------------------------------------------------
     # 2. Fetch a single large window up to end_ts
     # ----------------------------------------------------
-    window = fetch_last_n_candles(pair, timeframe, end_ts, n=2000)
-    closes_all = [float(i["close"]) for i in window]
+    # Fetch enough candles to cover entire range + TA history requirements
+    # TA calculations (especially MACD) need ~35 data points minimum
+    TA_MIN_HISTORY = 35
+    num_candles_in_range = len(candles)
+    fetch_count = num_candles_in_range + TA_MIN_HISTORY
+    window = fetch_last_n_candles(pair, timeframe, end_ts, n=fetch_count)
+    
+    # Extract closes defensively
+    closes_all, bad_items = extract_closes(window)
+    if bad_items:
+        log_info("Some items missing/invalid close", valid_count=len(closes_all), bad_count=len(bad_items), bad_sample=bad_items[:3])
+    
+    # Quit early if not enough history
+    if len(closes_all) < MIN_REQUIRED:
+        log_info("Insufficient history for TA in range, quitting", pair=pair, timeframe=timeframe,
+                 available=len(closes_all), required=MIN_REQUIRED)
+        return {
+            "pair": pair,
+            "timeframe": timeframe,
+            "start_ts": start_ts,
+            "end_ts": end_ts,
+            "status": "insufficient_history",
+            "available_closes": len(closes_all)
+        }
 
     # Map timestamp → index in window
     index_by_ts = {extract_timestamp_from_sk(i["SK"]): idx for idx, i in enumerate(window)}
 
+    # TA_MIN_HISTORY is the minimum data points needed for all TA calculations
+    # MACD needs slow + signal = 26 + 9 = 35; RSI needs 15; EMA20 needs 20
+    TA_MIN_HISTORY = 35
+    
     # ----------------------------------------------------
     # 3. Update TA columns for each candle
     # ----------------------------------------------------
@@ -302,6 +365,10 @@ def calculate_range(pair, timeframe, start_ts, end_ts):
             continue
 
         idx = index_by_ts[ts]
+        # Skip candles without sufficient prior history for TA (need TA_MIN_HISTORY items total)
+        if idx < TA_MIN_HISTORY - 1:
+            continue
+
         closes = closes_all[: idx + 1]
 
         ta = compute_all_ta(closes)

@@ -277,21 +277,46 @@ def lambda_handler(event, context):
 
     log_info("Lambda triggered", event=json.dumps(event))
 
-    # Extract symbol
-    if "detail" in event:
+    # Extract event data from different event sources
+    event_data = {}
+    
+    # SQS event
+    if "Records" in event:
+        record = event["Records"][0]
+        body = json.loads(record["body"])
+        event_data = body
+    # EventBridge event
+    elif "detail" in event:
         event_data = event["detail"]
+    # Direct invocation
     else:
         event_data = event
 
+    # Extract parameters
     symbol = event_data.get("symbol")
     timeframe = event_data.get("timeframe")
+    
+    # Handle both string and numeric types for timestamps
+    start_ts_raw = event_data.get("start_ts")
+    end_ts_raw = event_data.get("end_ts")
+    
+    start_ts = None
+    end_ts = None
+    
+    if start_ts_raw is not None:
+        start_ts = int(float(start_ts_raw))
+    
+    if end_ts_raw is not None:
+        end_ts = int(float(end_ts_raw))
 
     if not symbol:
         raise ValueError("No symbol provided in event")
     if not timeframe:
         raise ValueError("No timeframe provided in event")
 
-    start_ts, end_ts = get_timeframe_range(timeframe)
+    # Use provided timestamps or generate from timeframe
+    if start_ts is None or end_ts is None:
+        start_ts, end_ts = get_timeframe_range(timeframe)
 
     log_info("Starting export", symbol=symbol, timeframe=timeframe, 
              start_ts=datetime.fromtimestamp(start_ts).isoformat(), 

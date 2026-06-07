@@ -12,7 +12,8 @@ logger.setLevel(logging.INFO)
 events = boto3.client("events")
 
 DEFAULT_SYMBOLS = ["XXBTZUSD", "XETHZUSD"]
-TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
+CALCULATE_TA_TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
+AGGREGATE_TIMEFRAMES = ["5m", "15m", "30m", "1h", "4h", "1d"]
 
 def log_info(message, **kwargs):
     logger.info(f"{message} | {json.dumps(kwargs)}")
@@ -21,11 +22,22 @@ def log_error(message, **kwargs):
     logger.error(f"{message} | {json.dumps(kwargs)}")
 
 def validateInput(target, symbol, timeframe, start_date, end_date):
+
+    if target is None:
+        raise ValueError("Target is required")
+
     if symbol is not None and not isinstance(symbol, str):
         raise ValueError("Symbol must be a string")
 
-    if timeframe is not None and timeframe not in TIMEFRAMES:
-        raise ValueError(f"Invalid timeframe: {timeframe}. Must be one of {TIMEFRAMES}")
+    if target == "calculate-ta":
+        valid_timeframes = CALCULATE_TA_TIMEFRAMES
+    elif target == "aggregate":
+        valid_timeframes = AGGREGATE_TIMEFRAMES
+    else:
+        raise ValueError(f"Invalid target: {target}. Must be 'calculate-ta' or 'aggregate'")
+    
+    if timeframe is not None and timeframe not in valid_timeframes:
+        raise ValueError(f"Invalid timeframe: {timeframe}. Must be one of {valid_timeframes}")
 
     if start_date is not None:
         try:
@@ -105,7 +117,13 @@ def lambda_handler(event, context):
         validateInput(target, symbol, timeframe, start_date, end_date)
 
         symbols = [symbol] if symbol else DEFAULT_SYMBOLS
-        timeframes = [timeframe] if timeframe else TIMEFRAMES
+        timeframes = [timeframe] if timeframe else None
+
+        if timeframes is None:
+            if target == "calculate-ta":
+                timeframes = CALCULATE_TA_TIMEFRAMES
+            else:
+                timeframes = AGGREGATE_TIMEFRAMES
 
         # for each symbol, split date range of start date to end date into 1 day chunks, and send a message to EventBridge for each chunk
         for symbol in symbols:

@@ -340,16 +340,36 @@ def lambda_handler(event, context):
     try:
         log_info("Lambda triggered", event=json.dumps(event))
 
-        # Extract symbol
-        if "detail" in event:
+        # Extract event data from different event sources
+        event_data = {}
+        
+        # SQS event
+        if "Records" in event:
+            record = event["Records"][0]
+            body = json.loads(record["body"])
+            event_data = body
+        # EventBridge event
+        elif "detail" in event:
             event_data = event["detail"]
+        # Direct invocation
         else:
             event_data = event
 
         symbol = event_data.get("symbol", DEFAULT_SYMBOL)
         timeframe = event_data.get("timeframe", DEFAULT_TIMEFRAME)
-        start_ts = event_data.get("start_ts")
-        end_ts = event_data.get("end_ts")
+        
+        # Handle both string and numeric types for timestamps
+        start_ts_raw = event_data.get("start_ts")
+        end_ts_raw = event_data.get("end_ts")
+        
+        start_ts = None
+        end_ts = None
+        
+        if start_ts_raw is not None:
+            start_ts = int(float(start_ts_raw))
+        
+        if end_ts_raw is not None:
+            end_ts = int(float(end_ts_raw))
 
         # Basic validation
         if not symbol:
