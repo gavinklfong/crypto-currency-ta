@@ -183,7 +183,7 @@ def test_lambda_handler_success(
 
     assert result["status"] == "ok"
     assert "periods_exported" in result
-    assert mock_write.call_count == 2
+    assert mock_write.call_count == 1
 
 
 @patch("lambda_function.query_dynamodb")
