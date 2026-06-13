@@ -33,19 +33,19 @@ def mock_sqs():
 
 
 @pytest.fixture
-def mock_send_sqs_message():
-    with patch.object(lf, "send_sqs_message") as mock:
+def mock_send_event():
+    with patch.object(lf, "send_event") as mock:
         yield mock
 
 
 # ---------------------------------------------------------
 # 1. Happy path — direct invocation
 # ---------------------------------------------------------
-def test_lambda_handler_direct(mock_send_sqs_message):
+def test_lambda_handler_direct(mock_send_event):
     event = {
-        "target": "fetch-market-data",
+        "target": "aggregate-timeframe",
         "symbol": "XXBTZUSD",
-        "timeframe": "1m",
+        "timeframe": "5m",
         "start_date": "2024-01-01",
         "end_date": "2024-01-03"
     }
@@ -54,23 +54,23 @@ def test_lambda_handler_direct(mock_send_sqs_message):
     body = json.loads(response["body"])
 
     assert response["statusCode"] == 200
-    assert body["target"] == "fetch-market-data"
+    assert body["target"] == "aggregate-timeframe"
     assert body["symbols"] == ["XXBTZUSD"]
-    assert body["timeframes"] == ["1m"]
+    assert body["timeframes"] == ["5m"]
     assert body["start_date"] == "2024-01-01"
     assert body["end_date"] == "2024-01-03"
     assert body["count"] == 1  # 1 symbol × 1 timeframe
 
-    # Should call send_sqs_message 3 times (3 days)
-    assert mock_send_sqs_message.call_count == 3
+    # Should call send_event 3 times (3 days)
+    assert mock_send_event.call_count == 3
 
     # Extract all calls
-    calls = mock_send_sqs_message.call_args_list
+    calls = mock_send_event.call_args_list
 
     expected_calls = [
-        ("fetch-market-data", "XXBTZUSD", "1m", "2024-01-01", "2024-01-03", "2024-01-01T00:00:00", "2024-01-01T23:59:59"),
-        ("fetch-market-data", "XXBTZUSD", "1m", "2024-01-01", "2024-01-03", "2024-01-02T00:00:00", "2024-01-02T23:59:59"),
-        ("fetch-market-data", "XXBTZUSD", "1m", "2024-01-01", "2024-01-03", "2024-01-03T00:00:00", "2024-01-03T23:59:59"),
+        ("aggregate-timeframe", "XXBTZUSD", "5m", "2024-01-01", "2024-01-03", "2024-01-01T00:00:00", "2024-01-01T23:59:59"),
+        ("aggregate-timeframe", "XXBTZUSD", "5m", "2024-01-01", "2024-01-03", "2024-01-02T00:00:00", "2024-01-02T23:59:59"),
+        ("aggregate-timeframe", "XXBTZUSD", "5m", "2024-01-01", "2024-01-03", "2024-01-03T00:00:00", "2024-01-03T23:59:59"),
     ]
 
     # Validate each call
@@ -87,16 +87,72 @@ def test_lambda_handler_direct(mock_send_sqs_message):
         # Compare ISO timestamps
         assert args[5].isoformat() == expected[5]
         assert args[6].isoformat() == expected[6]
-        
+
+def test_lambda_handler_direct_calculate_ta(mock_send_event):
+    event = {
+        "target": "calculate-ta",
+        "symbol": "XXBTZUSD",
+        "timeframe": "1m",
+        "start_date": "2024-01-01",
+        "end_date": "2024-01-02"
+    }
+
+    response = lf.lambda_handler(event, None)
+    body = json.loads(response["body"])
+
+    assert response["statusCode"] == 200
+    assert body["target"] == "calculate-ta"
+    assert body["symbols"] == ["XXBTZUSD"]
+    assert body["timeframes"] == ["1m"]
+    assert body["start_date"] == "2024-01-01"
+    assert body["end_date"] == "2024-01-02"
+    assert body["count"] == 1  # 1 symbol × 1 timeframe
+
+    # Should call send_event 12 times (12 hours chunks for 2 days)
+    assert mock_send_event.call_count == 12
+
+    # Extract all calls
+    calls = mock_send_event.call_args_list
+
+    expected_calls = [
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-01T00:00:00", "2024-01-01T04:00:00"),
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-01T04:00:00", "2024-01-01T08:00:00"),
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-01T08:00:00", "2024-01-01T12:00:00"),
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-01T12:00:00", "2024-01-01T16:00:00"),
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-01T16:00:00", "2024-01-01T20:00:00"),
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-01T20:00:00", "2024-01-02T00:00:00"),
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-02T00:00:00", "2024-01-02T04:00:00"),
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-02T04:00:00", "2024-01-02T08:00:00"),
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-02T08:00:00", "2024-01-02T12:00:00"),
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-02T12:00:00", "2024-01-02T16:00:00"),
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-02T16:00:00", "2024-01-02T20:00:00"),
+        ("calculate-ta", "XXBTZUSD", "1m", "2024-01-01", "2024-01-02", "2024-01-02T20:00:00", "2024-01-03T00:00:00")        
+    ]
+
+    # Validate each call
+    for call, expected in zip(calls, expected_calls):
+        args, kwargs = call
+
+        assert args[0] == expected[0]   # target
+        assert args[1] == expected[1]   # symbol
+        assert args[2] == expected[2]   # timeframe
+
+        assert args[3] == expected[3]
+        assert args[4] == expected[4]
+
+        # Compare ISO timestamps
+        assert args[5].isoformat() == expected[5]
+        assert args[6].isoformat() == expected[6]      
+
 # ---------------------------------------------------------
 # 2. Happy path — EventBridge format
 # ---------------------------------------------------------
-def test_lambda_handler_eventbridge(mock_send_sqs_message):
+def test_lambda_handler_eventbridge(mock_send_event):
     event = {
         "detail": {
-            "target": "fetch-market-data",
+            "target": "aggregate-timeframe",
             "symbol": "XXBTZUSD",
-            "timeframe": "1m",
+            "timeframe": "5m",
             "start_date": "2024-01-01",
             "end_date": "2024-01-01"
         }
@@ -107,8 +163,8 @@ def test_lambda_handler_eventbridge(mock_send_sqs_message):
 
     assert response["statusCode"] == 200
     assert body["symbols"] == ["XXBTZUSD"]
-    assert body["timeframes"] == ["1m"]
-    assert mock_send_sqs_message.call_count == 1
+    assert body["timeframes"] == ["5m"]
+    assert mock_send_event.call_count == 1
 
 
 # ---------------------------------------------------------
@@ -116,7 +172,7 @@ def test_lambda_handler_eventbridge(mock_send_sqs_message):
 # ---------------------------------------------------------
 def test_lambda_handler_invalid_timeframe():
     event = {
-        "target": "fetch-market-data",
+        "target": "aggregate-timeframe",
         "symbol": "XXBTZUSD",
         "timeframe": "99m",  # invalid
         "start_date": "2024-01-01",
@@ -135,9 +191,9 @@ def test_lambda_handler_invalid_timeframe():
 # ---------------------------------------------------------
 def test_lambda_handler_invalid_date_range():
     event = {
-        "target": "fetch-market-data",
+        "target": "aggregate-timeframe",
         "symbol": "XXBTZUSD",
-        "timeframe": "1m",
+        "timeframe": "5m",
         "start_date": "2024-01-05",
         "end_date": "2024-01-01"
     }

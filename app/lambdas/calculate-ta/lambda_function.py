@@ -198,6 +198,7 @@ def lambda_handler(event, context):
 
     # Check if range calculation is requested
     if start_ts is not None and end_ts is not None:
+        log_info("Range calculation requested", symbol=symbol, timeframe=timeframe, start_ts=start_ts, end_ts=end_ts)
         return calculate_range(
             symbol,
             timeframe,

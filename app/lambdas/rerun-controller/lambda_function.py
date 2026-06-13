@@ -68,9 +68,27 @@ def split_date_range_into_chunks(start_date_str, end_date_str, chunk_size_days=1
 
     return chunks
 
+def split_date_range_into_chunks_for_ta_calculation(start_date_str, end_date_str, chunk_size_hours=4):
+    start_date = datetime.fromisoformat(start_date_str).replace(hour=0, minute=0, second=0, microsecond=0)
+    end_date = datetime.fromisoformat(end_date_str).replace(hour=23, minute=59, second=59, microsecond=0)
+
+    chunks = []
+    current_start = start_date
+
+    while current_start < end_date:
+        current_end = current_start + timedelta(hours=chunk_size_hours)
+        chunks.append((current_start, current_end))
+        current_start = current_end 
+
+    return chunks
+
 def process_symbol_timeframe(target, symbol, timeframe, start_date, end_date):
     log_info("Processing symbol", target=target, symbol=symbol, timeframe=timeframe)
-    chunks = split_date_range_into_chunks(start_date, end_date)
+    if target == "calculate-ta":
+        chunks = split_date_range_into_chunks_for_ta_calculation(start_date, end_date)
+    else:
+        chunks = split_date_range_into_chunks(start_date, end_date)
+
     for chunk_start, chunk_end in chunks:
         send_event(target, symbol, timeframe, start_date, end_date, chunk_start, chunk_end)
 
