@@ -103,28 +103,6 @@ variable "layers" {
 }
 
 variable "lambdas" {
-  description = "Lambda configurations"
-  type = map(object({
-    function_name = string
-    zip_path      = string
-    layers        = optional(list(string), [])
-    timeout       = optional(number, 600)
-    memory_size   = optional(number)
-    route_key     = optional(string)
-  }))
-  default = {
-    "rerun-controller" = {
-      function_name = "rerun-controller"
-      zip_path      = "../build/package/lambdas/rerun-controller.zip"
-    }
-    "rerun-fetch-market-data" = {
-      function_name = "rerun-fetch-market-data"
-      zip_path      = "../build/package/lambdas/rerun-fetch-market-data.zip"
-    }
-  }
-}
-
-variable "scheduled_lambdas" {
   description = "Lambda configurations with timeframe subscriptions and optional schedule overrides per function"
   type = map(object({
     function_name      = string
@@ -133,7 +111,7 @@ variable "scheduled_lambdas" {
     timeout            = optional(number, 600)
     memory_size        = optional(number)
     route_key          = optional(string)
-    timeframes         = list(string)
+    timeframes         = optional(list(string), [])
     schedule_overrides = optional(map(string), {})
   }))
   default = {
@@ -172,6 +150,16 @@ variable "scheduled_lambdas" {
         "4h"  = "rate(1 day)"
         "1d"  = "rate(1 day)"
       }
+    }
+
+    "rerun-controller" = {
+      function_name = "rerun-controller"
+      zip_path      = "../build/package/lambdas/rerun-controller.zip"
+    }
+
+    "rerun-fetch-market-data" = {
+      function_name = "rerun-fetch-market-data"
+      zip_path      = "../build/package/lambdas/rerun-fetch-market-data.zip"
     }
   }
 }
