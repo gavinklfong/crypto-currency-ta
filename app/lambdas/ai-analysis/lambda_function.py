@@ -101,9 +101,7 @@ def lambda_handler(event, context):
     data = fetch_data(symbol, "1m", lookback_minutes=60)
     
     if not data:
-        # Proceed even if no data is found, as long as a symbol was provided, 
-        # to satisfy the requirement for successful processing of SQS events.
-        pass
+        return {"status": "error", "message": "No 1m data found"}
 
     # 2. Prepare data for prompt
     # We want to include OHLCV and TAs if they exist in the 1m records 
@@ -114,8 +112,10 @@ def lambda_handler(event, context):
     data_summary = []
     for item in data:
         # Extracting key values safely
-        ts = item.get("SK", "").split("#")[-1]
-        ts_dt = datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        sk_parts = item.get("SK", "").split("#")
+        timestamp_str = sk_parts[-1]
+        # Attempt to find the numeric timestamp part, assuming it's the last sequence of digits
+        ts_dt = datetime.fromtimestamp(int(timestamp_str.lstrip("TS")), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
         
         row = {
             "time": ts_dt,
