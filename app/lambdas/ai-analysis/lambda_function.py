@@ -164,14 +164,14 @@ def lambda_handler(event, context):
 
     prompt = f"""
 At the very top of your response, output a Slack‑bold subject line formatted EXACTLY as:
-*Market Summary of [symbol] time range [start] - [end]*
-Replace [symbol], [start], and [end] with the actual values provided in the DATA section.
+*Market Summary of [pair] time range [start] - [end]*
+Replace [pair], [start], and [end] with the actual values provided in the DATA section.
 
 This subject line must appear BEFORE the section titles.
 Do not format it as a heading.
 Do not add any text before or after it.
 
-Analyze the following 1-minute cryptocurrency market data for XETHZUSD for the last hour.
+Analyze the following 1-minute cryptocurrency market data for the last hour.
 Provide a brief technical analysis including trend, momentum, and potential support/resistance levels.
 
 Respond only using the following sections, each formatted EXACTLY as shown:
