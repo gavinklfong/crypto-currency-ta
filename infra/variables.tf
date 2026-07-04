@@ -161,5 +161,10 @@ variable "lambdas" {
       function_name = "rerun-fetch-market-data"
       zip_path      = "../build/package/lambdas/rerun-fetch-market-data.zip"
     }
+
+    "ai-analysis" = {
+      function_name = "ai-analysis"
+      zip_path      = "../build/package/lambdas/ai-analysis.zip"
+    }
   }
 }
