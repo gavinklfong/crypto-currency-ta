@@ -124,6 +124,9 @@ terraform init
 # Review planned changes
 terraform plan
 
+# Set environment variable for slack hook
+export TF_VAR_lambda_env='{"ai-analysis":{"SLACK_WEBHOOK_URL":"<placeholder>>"}}'
+
 # Deploy infrastructure
 terraform apply
 ```

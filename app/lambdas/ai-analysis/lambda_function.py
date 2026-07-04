@@ -1,9 +1,11 @@
+import os
 import boto3
 import json
 import logging
 import decimal
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
+import urllib.request
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -13,6 +15,8 @@ bedrock_runtime = boto3.client("bedrock-runtime")
 
 TABLE_NAME = "crypto-currency-ta-market-data"
 table = dynamodb.Table(TABLE_NAME)
+
+MODEL_ID = os.environ.get("LLM_MODEL_ID", "google.gemma-3-4b-it")
 
 def log_info(message, **kwargs):
     logger.info(f"{message} | {json.dumps(kwargs)}")
@@ -53,7 +57,6 @@ def fetch_data(pair, timeframe, lookback_minutes=60):
 
 def call_bedrock(prompt):
     """Call AWS Bedrock with the prompt."""
-    model_id = "google.gemma-3-4b-it"
 
     # Your Bedrock client expects the Chat Completions schema
     body = json.dumps({
@@ -69,7 +72,7 @@ def call_bedrock(prompt):
     try:
         response = bedrock_runtime.invoke_model(
             body=body,
-            modelId=model_id,
+            modelId=MODEL_ID,
             accept="application/json",
             contentType="application/json"
         )
@@ -85,6 +88,18 @@ def call_bedrock(prompt):
         log_error("Bedrock invocation failed", error=str(e))
         raise Exception(f"Bedrock invocation failed: {str(e)}")
 
+def send_to_slack(text: str):
+    webhook = os.environ["SLACK_WEBHOOK_URL"]
+    data = json.dumps({"text": text}).encode("utf-8")
+
+    req = urllib.request.Request(
+        webhook,
+        data=data,
+        headers={"Content-Type": "application/json"}
+    )
+
+    with urllib.request.urlopen(req) as resp:
+        return resp.read().decode("utf-8")
 
 def lambda_handler(event, context):
     log_info("AI Analysis Lambda triggered", event=json.dumps(event))
@@ -148,15 +163,71 @@ def lambda_handler(event, context):
         data_summary.append(row)
 
     prompt = f"""
-    Analyze the following 1-minute cryptocurrency market data for {symbol} for the last hour.
-    Provide a brief technical analysis including trend, momentum, and potential support/resistance levels.
+At the very top of your response, output a Slack‑bold subject line formatted EXACTLY as:
+*Market Summary of [symbol] time range [start] - [end]*
+Replace [symbol], [start], and [end] with the actual values provided in the DATA section.
 
-    Data:
+This subject line must appear BEFORE the section titles.
+Do not format it as a heading.
+Do not add any text before or after it.
+
+Analyze the following 1-minute cryptocurrency market data for XETHZUSD for the last hour.
+Provide a brief technical analysis including trend, momentum, and potential support/resistance levels.
+
+Respond only using the following sections, each formatted EXACTLY as shown:
+*Market Summary*
+*Technical Indicators*
+*Pattern Recognition*
+*Bias & Risk*
+*Final Outlook*
+
+Do not alter the section titles.
+Do not include any text outside these sections.
+
+OUTPUT SPECIFICATION
+- Begin your response directly with the analysis.
+- Do not acknowledge the request.
+- Do not use conversational language.
+
+Formatting Rules (Slack mrkdwn only):
+
+Allowed:
+*bold*
+_italic_
+> block quotes
+- bullet lists
+`inline code`
+```code blocks```
+
+Forbidden (strict):
+**double-asterisk bold**
+__double-underscore bold__
+Any bold using two characters on each side
+Any bold that is not Slack-style single-asterisk bold
+Markdown headings (#, ##, ###, ####, etc.)
+Tables
+HTML tags
+Markdown links ([text](url))
+Images
+Any formatting not listed as allowed
+
+Additional strict rules:
+- Bullet points MUST NOT contain double-asterisk bold. Use Slack bold only: *RSI*, *MACD*, *EMA20*, etc.
+- Indicator names MUST use Slack bold only.
+- Section titles MUST be Slack bold exactly as shown.
+- Do not add decorative separators or extra blank lines.
+- Do not wrap indicator names in any formatting except Slack bold.
+
+DATA:
     {json.dumps(data_summary, indent=2)}
     """
 
+    # print("--- Prompt to Bedrock ---")
+    # print(prompt)
+
     try:
         analysis_result = call_bedrock(prompt)
+        send_to_slack(analysis_result)
     except Exception as e:
         log_error("Bedrock analysis failed", error=str(e))
         return {

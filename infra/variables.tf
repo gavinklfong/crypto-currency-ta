@@ -102,6 +102,11 @@ variable "layers" {
   }
 }
 
+variable "lambda_env" {
+  type    = map(map(string))
+  default = {}
+}
+
 variable "lambdas" {
   description = "Lambda configurations with timeframe subscriptions and optional schedule overrides per function"
   type = map(object({
@@ -113,6 +118,7 @@ variable "lambdas" {
     route_key          = optional(string)
     timeframes         = optional(list(string), [])
     schedule_overrides = optional(map(string), {})
+    environment        = optional(map(string), {})
   }))
   default = {
 
@@ -165,6 +171,10 @@ variable "lambdas" {
     "ai-analysis" = {
       function_name = "ai-analysis"
       zip_path      = "../build/package/lambdas/ai-analysis.zip"
+      environment = {
+        LLM_MODEL_ID = "google.gemma-3-4b-it"
+      }
     }
   }
 }
+

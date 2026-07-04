@@ -29,5 +29,5 @@ These tests use **mock objects** for Bedrock and DynamoDB, ensuring fast executi
 
 ### 2. E2E Integration Tests (Live Environment)
 These tests execute the code against the **real AWS services**, including DynamoDB and Bedrock.
-*   **Command:** `python -c 'from app.lambdas.ai_analysis.lambda_function import lambda_handler; event = {"symbol": "BTCUSD", "timeframe": "1m"}; print(lambda_handler(event, None))'` or the dedicated test file (`test_lambda_live_e2e.py`).
+*   **Command:** `SLACK_WEBHOOK_URL=https://hooks.slack.com/services/XXXX/YYYY/MMMM pytest -s -m manual`
 *   **🚨 WARNING:** **This will incur real AWS costs and modify real data.** Use this only in a dedicated sandbox environment.

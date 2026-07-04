@@ -22,4 +22,11 @@ resource "aws_lambda_function" "lambda" {
     for layer_name in each.value.layers :
     aws_lambda_layer_version.layers[layer_name].arn
   ]
+
+  environment {
+    variables = merge(
+      each.value.environment,
+      lookup(var.lambda_env, each.key, {})
+    )
+  }
 }
