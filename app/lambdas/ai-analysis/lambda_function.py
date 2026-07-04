@@ -32,6 +32,8 @@ def fetch_data(pair, timeframe, lookback_minutes=60):
     sk_start = f"TF#{timeframe}#TS#{start_ts}"
     sk_end = f"TF#{timeframe}#TS#{end_ts}"
     
+    print(f"Fetching data for {pk} from {sk_start} to {sk_end} (last {lookback_minutes} minutes)")
+
     query_params = {
         "KeyConditionExpression": "PK = :pk AND SK BETWEEN :sk_start AND :sk_end",
         "ExpressionAttributeValues": {
@@ -51,17 +53,17 @@ def fetch_data(pair, timeframe, lookback_minutes=60):
 
 def call_bedrock(prompt):
     """Call AWS Bedrock with the prompt."""
-    model_id = "anthropic.claude-3-haiku-20240307-v1:0" # Using Haiku for speed/cost
-    
+    model_id = "google.gemma-3-4b-it"
+
+    # Your Bedrock client expects the Chat Completions schema
     body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 1000,
         "messages": [
             {
                 "role": "user",
-                "content": [{"type": "text", "text": prompt}]
+                "content": prompt
             }
-        ]
+        ],
+        "max_tokens": 1000
     })
 
     try:
@@ -71,11 +73,18 @@ def call_bedrock(prompt):
             accept="application/json",
             contentType="application/json"
         )
+
         response_body = json.loads(response.get("body").read())
-        return response_body["content"][0]["text"]
+
+        # print(f"Bedrock response: {json.dumps(response_body, indent=2)}")
+
+        # Extract the OpenAI-style response
+        return response_body["choices"][0]["message"]["content"]
+
     except Exception as e:
         log_error("Bedrock invocation failed", error=str(e))
         raise Exception(f"Bedrock invocation failed: {str(e)}")
+
 
 def lambda_handler(event, context):
     log_info("AI Analysis Lambda triggered", event=json.dumps(event))
@@ -99,7 +108,8 @@ def lambda_handler(event, context):
     # Note: The user asked for 'last 1 hour 1-minute market data and TAs'
     # So we query the 1m timeframe
     data = fetch_data(symbol, "1m", lookback_minutes=60)
-    
+    print(f"Fetched {len(data)} records for {symbol} 1m data")
+
     if not data:
         return {"status": "error", "message": "No 1m data found"}
 
