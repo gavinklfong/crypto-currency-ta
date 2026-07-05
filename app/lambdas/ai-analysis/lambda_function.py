@@ -18,7 +18,7 @@ MODEL_ID = os.environ.get("LLM_MODEL_ID", "google.gemma-3-4b-it")
 
 PROMPT_TEMPLATE = """
 # Role & Context
-You are a quantitative cryptocurrency trading analyst. Analyze the provided 1-minute market data payload and output a strict technical summary.
+You are a quantitative cryptocurrency trading analyst. Analyze the provided 1-minute market data payload and output a highly condensed, bulleted technical summary.
 
 # Output Formatting Rules (Slack mrkdwn Only)
 You must strictly follow these Slack syntax constraints. A single formatting error will break the layout.
@@ -36,32 +36,35 @@ You must strictly follow these Slack syntax constraints. A single formatting err
 * Do not use Markdown headings (#, ##, ###).
 * Do not use tables, HTML tags, links, or decorative separators.
 
-# Structural Specification
-Your output must follow this exact layout sequence, with no introductory text, no conversational filler, and no acknowledgment.
+# Structural Specification & Length Limits
+Your output must follow this exact layout sequence. Do not include any introductory text, conversational filler, or acknowledgment. Every section must be brief.
 
 <layout_sequence>
 *Market Summary of [pair] time range [start] - [end]*
 
 *Market Summary*
-[Insert concise overview of trend and volume action here]
+- [Provide a 1-sentence overview of overall price and volume action]
 
 *Technical Indicators*
-[Evaluate indicators here. Every indicator name, such as *RSI*, *MACD*, or *EMA*, must be wrapped exclusively in single-asterisk Slack bold]
+- *RSI*: [1 sentence on active range and momentum state]
+- *EMA*: [1 sentence on price relation to the trend line]
+- *MACD*: [1 sentence on current histogram/crossover signal]
 
 *Pattern Recognition*
-[Insert candlestick or structural pattern observations here]
+- [List max 2 bullet points. Each bullet must be 1 sentence detailing a specific breakout, consolidation, or reversal structure observed]
 
 *Bias & Risk*
-[Insert local support/resistance evaluations and directional risk here]
+- *Bias*: [1 short sentence declaring directional bias]
+- *Risk*: [1 short sentence isolating the primary volatility threat or fakeout risk]
 
 *Final Outlook*
-[Insert target zones or trend continuations here]
+- [List max 2 bullet points. State immediate key price levels to watch and the highly probable next move in 1 sentence each]
 </layout_sequence>
 
 # Critical Constraints
 * The top line text must appear exactly as formatted, substituting the bracketed values with the actual variables found in the data payload.
 * Section titles must match the spelling and single-asterisk bold casing in the `<layout_sequence>` tag exactly.
-* Bullet points must never contain double-asterisk bold.
+* Bullet points must never contain double-asterisk bold. All indicator names must be wrapped exclusively in single-asterisk Slack bold.
 
 # Data Payload
 <data>
@@ -206,7 +209,7 @@ def lambda_handler(event, context):
     data_summary = prepare_data_for_prompt(data)
     prompt = PROMPT_TEMPLATE.format(data_json=json.dumps(data_summary, indent=2))
 
-    try:
+    try:    
         analysis_result = call_bedrock(prompt)
         send_to_sns(analysis_result)
     except Exception as e:
