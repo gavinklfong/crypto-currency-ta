@@ -77,8 +77,6 @@ def call_bedrock(prompt):
 
         response_body = json.loads(response.get("body").read())
 
-        # print(f"Bedrock response: {json.dumps(response_body, indent=2)}")
-
         # Extract the OpenAI-style response
         return response_body["choices"][0]["message"]["content"]
 
@@ -155,63 +153,56 @@ def lambda_handler(event, context):
         data_summary.append(row)
 
     prompt = f"""
-At the very top of your response, output a Slack‑bold subject line formatted EXACTLY as:
+# Role & Context
+You are a quantitative cryptocurrency trading analyst. Analyze the provided 1-minute market data payload and output a strict technical summary.
+
+# Output Formatting Rules (Slack mrkdwn Only)
+You must strictly follow these Slack syntax constraints. A single formatting error will break the layout.
+
+## Allowed Syntax:
+* *bold* (Use exactly one asterisk on each side)
+* _italic_
+* > block quotes
+* - bullet lists
+* `inline code`
+* ```code blocks```
+
+## Strictly Forbidden Syntax:
+* Do not use double asterisks (**bold**) or double underscores (__bold__) under any circumstances.
+* Do not use Markdown headings (#, ##, ###).
+* Do not use tables, HTML tags, links, or decorative separators.
+
+# Structural Specification
+Your output must follow this exact layout sequence, with no introductory text, no conversational filler, and no acknowledgment.
+
+<layout_sequence>
 *Market Summary of [pair] time range [start] - [end]*
-Replace [pair], [start], and [end] with the actual values provided in the DATA section.
 
-This subject line must appear BEFORE the section titles.
-Do not format it as a heading.
-Do not add any text before or after it.
-
-Analyze the following 1-minute cryptocurrency market data for the last hour.
-Provide a brief technical analysis including trend, momentum, and potential support/resistance levels.
-
-Respond only using the following sections, each formatted EXACTLY as shown:
 *Market Summary*
+[Insert concise overview of trend and volume action here]
+
 *Technical Indicators*
+[Evaluate indicators here. Every indicator name, such as *RSI*, *MACD*, or *EMA*, must be wrapped exclusively in single-asterisk Slack bold]
+
 *Pattern Recognition*
+[Insert candlestick or structural pattern observations here]
+
 *Bias & Risk*
+[Insert local support/resistance evaluations and directional risk here]
+
 *Final Outlook*
+[Insert target zones or trend continuations here]
+</layout_sequence>
 
-Do not alter the section titles.
-Do not include any text outside these sections.
+# Critical Constraints
+* The top line text must appear exactly as formatted, substituting the bracketed values with the actual variables found in the data payload.
+* Section titles must match the spelling and single-asterisk bold casing in the `<layout_sequence>` tag exactly.
+* Bullet points must never contain double-asterisk bold.
 
-OUTPUT SPECIFICATION
-- Begin your response directly with the analysis.
-- Do not acknowledge the request.
-- Do not use conversational language.
-
-Formatting Rules (Slack mrkdwn only):
-
-Allowed:
-*bold*
-_italic_
-> block quotes
-- bullet lists
-`inline code`
-```code blocks```
-
-Forbidden (strict):
-**double-asterisk bold**
-__double-underscore bold__
-Any bold using two characters on each side
-Any bold that is not Slack-style single-asterisk bold
-Markdown headings (#, ##, ###, ####, etc.)
-Tables
-HTML tags
-Markdown links ([text](url))
-Images
-Any formatting not listed as allowed
-
-Additional strict rules:
-- Bullet points MUST NOT contain double-asterisk bold. Use Slack bold only: *RSI*, *MACD*, *EMA20*, etc.
-- Indicator names MUST use Slack bold only.
-- Section titles MUST be Slack bold exactly as shown.
-- Do not add decorative separators or extra blank lines.
-- Do not wrap indicator names in any formatting except Slack bold.
-
-DATA:
+# Data Payload
+<data>
     {json.dumps(data_summary, indent=2)}
+</data>
     """
 
     # print("--- Prompt to Bedrock ---")

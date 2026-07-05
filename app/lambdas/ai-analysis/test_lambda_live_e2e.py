@@ -1,6 +1,7 @@
 # app/lambdas/ai-analysis/test_lambda_live_e2e.py
 import pytest
 import os
+from unittest.mock import patch
 from lambda_function import lambda_handler
 
 @pytest.mark.manual
@@ -19,8 +20,13 @@ def test_lambda_e2e_integration():
     
     try:
         # Execute the lambda_handler with a real event payload
-        response = lambda_handler(event, None)
-        
+        with patch('lambda_function.send_to_sns') as mock_send_to_sns:
+            response = lambda_handler(event, None)
+            
+            # Verify SNS was called
+            mock_send_to_sns.assert_called_once()
+            print("SNS mock verification: Success")
+            
         print("\n--- Lambda Execution Complete ---")
         print(f"Test Status: Success (Code {response.get('status')})")
         
