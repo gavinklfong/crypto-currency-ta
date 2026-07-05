@@ -16,6 +16,59 @@ table = dynamodb.Table(TABLE_NAME)
 
 MODEL_ID = os.environ.get("LLM_MODEL_ID", "google.gemma-3-4b-it")
 
+PROMPT_TEMPLATE = """
+# Role & Context
+You are a quantitative cryptocurrency trading analyst. Analyze the provided 1-minute market data payload and output a strict technical summary.
+
+# Output Formatting Rules (Slack mrkdwn Only)
+You must strictly follow these Slack syntax constraints. A single formatting error will break the layout.
+
+## Allowed Syntax:
+* *bold* (Use exactly one asterisk on each side)
+* _italic_
+* > block quotes
+* - bullet lists
+* `inline code`
+* ```code blocks```
+
+## Strictly Forbidden Syntax:
+* Do not use double asterisks (**bold**) or double underscores (__bold__) under any circumstances.
+* Do not use Markdown headings (#, ##, ###).
+* Do not use tables, HTML tags, links, or decorative separators.
+
+# Structural Specification
+Your output must follow this exact layout sequence, with no introductory text, no conversational filler, and no acknowledgment.
+
+<layout_sequence>
+*Market Summary of [pair] time range [start] - [end]*
+
+*Market Summary*
+[Insert concise overview of trend and volume action here]
+
+*Technical Indicators*
+[Evaluate indicators here. Every indicator name, such as *RSI*, *MACD*, or *EMA*, must be wrapped exclusively in single-asterisk Slack bold]
+
+*Pattern Recognition*
+[Insert candlestick or structural pattern observations here]
+
+*Bias & Risk*
+[Insert local support/resistance evaluations and directional risk here]
+
+*Final Outlook*
+[Insert target zones or trend continuations here]
+</layout_sequence>
+
+# Critical Constraints
+* The top line text must appear exactly as formatted, substituting the bracketed values with the actual variables found in the data payload.
+* Section titles must match the spelling and single-asterisk bold casing in the `<layout_sequence>` tag exactly.
+* Bullet points must never contain double-asterisk bold.
+
+# Data Payload
+<data>
+    {data_json}
+</data>
+"""
+
 def log_info(message, **kwargs):
     logger.info(f"{message} | {kwargs}")
 
@@ -52,6 +105,37 @@ def fetch_data(pair, timeframe, lookback_minutes=60):
     # Sort by timestamp to be sure
     items.sort(key=lambda x: int(x["SK"].split("#")[-1]))
     return items
+
+def prepare_data_for_prompt(data):
+    """Prepare market data for the AI prompt."""
+    data_summary = []
+    for item in data:
+        # Extracting key values safely
+        sk_parts = item.get("SK", "").split("#")
+        timestamp_str = sk_parts[-1]
+        # Attempt to find the numeric timestamp part, assuming it's the last sequence of digits
+        ts_dt = datetime.fromtimestamp(int(timestamp_str.lstrip("TS")), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        
+        row = {
+            "time": ts_dt,
+            "open": float(item.get("open", 0)),
+            "high": float(item.get("high", 0)),
+            "low": float(item.get("low", 0)),
+            "close": float(item.get("close", 0)),
+            "volume": float(item.get("volume", 0)),
+        }
+        
+        # Include TAs if present in the 1m records (e.g. if they were calculated for 1m)
+        if "ta_rsi14" in item: row["rsi"] = float(item["ta_rsi14"])
+        if "ta_ema20" in item: row["ema20"] = float(item["ta_ema20"])
+        if "ta_macd" in item:
+            macd = item["ta_macd"]
+            row["macd_line"] = float(macd.get("line", 0))
+            row["macd_signal"] = float(macd.get("signal", 0))
+            row["macd_hist"] = float(macd.get("histogram", 0))
+            
+        data_summary.append(row)
+    return data_summary
 
 def call_bedrock(prompt):
     """Call AWS Bedrock with the prompt."""
@@ -119,94 +203,8 @@ def lambda_handler(event, context):
         return {"status": "error", "message": "No 1m data found"}
 
     # 2. Prepare data for prompt
-    # We want to include OHLCV and TAs if they exist in the 1m records 
-    # (though TAs are usually on larger timeframes, they might be present if 1m also has them)
-    # Or maybe the user meant 'fetch 1m data AND the TAs from the corresponding larger timeframe'
-    # But let's stick to the 1m data requested.
-    
-    data_summary = []
-    for item in data:
-        # Extracting key values safely
-        sk_parts = item.get("SK", "").split("#")
-        timestamp_str = sk_parts[-1]
-        # Attempt to find the numeric timestamp part, assuming it's the last sequence of digits
-        ts_dt = datetime.fromtimestamp(int(timestamp_str.lstrip("TS")), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-        
-        row = {
-            "time": ts_dt,
-            "open": float(item.get("open", 0)),
-            "high": float(item.get("high", 0)),
-            "low": float(item.get("low", 0)),
-            "close": float(item.get("close", 0)),
-            "volume": float(item.get("volume", 0)),
-        }
-        
-        # Include TAs if present in the 1m records (e.g. if they were calculated for 1m)
-        if "ta_rsi14" in item: row["rsi"] = float(item["ta_rsi14"])
-        if "ta_ema20" in item: row["ema20"] = float(item["ta_ema20"])
-        if "ta_macd" in item:
-            macd = item["ta_macd"]
-            row["macd_line"] = float(macd.get("line", 0))
-            row["macd_signal"] = float(macd.get("signal", 0))
-            row["macd_hist"] = float(macd.get("histogram", 0))
-            
-        data_summary.append(row)
-
-    prompt = f"""
-# Role & Context
-You are a quantitative cryptocurrency trading analyst. Analyze the provided 1-minute market data payload and output a strict technical summary.
-
-# Output Formatting Rules (Slack mrkdwn Only)
-You must strictly follow these Slack syntax constraints. A single formatting error will break the layout.
-
-## Allowed Syntax:
-* *bold* (Use exactly one asterisk on each side)
-* _italic_
-* > block quotes
-* - bullet lists
-* `inline code`
-* ```code blocks```
-
-## Strictly Forbidden Syntax:
-* Do not use double asterisks (**bold**) or double underscores (__bold__) under any circumstances.
-* Do not use Markdown headings (#, ##, ###).
-* Do not use tables, HTML tags, links, or decorative separators.
-
-# Structural Specification
-Your output must follow this exact layout sequence, with no introductory text, no conversational filler, and no acknowledgment.
-
-<layout_sequence>
-*Market Summary of [pair] time range [start] - [end]*
-
-*Market Summary*
-[Insert concise overview of trend and volume action here]
-
-*Technical Indicators*
-[Evaluate indicators here. Every indicator name, such as *RSI*, *MACD*, or *EMA*, must be wrapped exclusively in single-asterisk Slack bold]
-
-*Pattern Recognition*
-[Insert candlestick or structural pattern observations here]
-
-*Bias & Risk*
-[Insert local support/resistance evaluations and directional risk here]
-
-*Final Outlook*
-[Insert target zones or trend continuations here]
-</layout_sequence>
-
-# Critical Constraints
-* The top line text must appear exactly as formatted, substituting the bracketed values with the actual variables found in the data payload.
-* Section titles must match the spelling and single-asterisk bold casing in the `<layout_sequence>` tag exactly.
-* Bullet points must never contain double-asterisk bold.
-
-# Data Payload
-<data>
-    {json.dumps(data_summary, indent=2)}
-</data>
-    """
-
-    # print("--- Prompt to Bedrock ---")
-    # print(prompt)
+    data_summary = prepare_data_for_prompt(data)
+    prompt = PROMPT_TEMPLATE.format(data_json=json.dumps(data_summary, indent=2))
 
     try:
         analysis_result = call_bedrock(prompt)
