@@ -26,7 +26,10 @@ resource "aws_lambda_function" "lambda" {
   environment {
     variables = merge(
       each.value.environment,
-      lookup(var.lambda_env, each.key, {})
+      lookup(var.lambda_env, each.key, {}),
+      {
+        SNS_TOPIC_ARN = aws_sns_topic.slack_notifications.arn
+      }
     )
   }
 }

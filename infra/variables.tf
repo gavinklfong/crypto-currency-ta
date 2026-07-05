@@ -175,6 +175,11 @@ variable "lambdas" {
         LLM_MODEL_ID = "google.gemma-3-4b-it"
       }
     }
+
+    "send-to-slack" = {
+      function_name = "send-to-slack"
+      zip_path      = "../build/package/lambdas/send-to-slack.zip"
+    }
   }
 }
 

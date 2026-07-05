@@ -101,6 +101,24 @@ resource "aws_iam_role_policy" "lambda_s3_access" {
   })
 }
 
+resource "aws_iam_role_policy" "lambda_sns_publish" {
+  name = "lambda-sns-publish-policy"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "sns:Publish"
+      ]
+      Resource = [
+        aws_sns_topic.slack_notifications.arn
+      ]
+    }]
+  })
+}
+
 ########################################
 # Lambda Layers
 ########################################
