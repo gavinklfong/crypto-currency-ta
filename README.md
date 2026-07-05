@@ -20,44 +20,35 @@ The system runs on automated schedules via AWS EventBridge and can be triggered 
 
 ```
 .
-├── app/                              # Lambda function source code
-│   ├── fetch-market-data/           # Fetches OHLC data from Kraken API
-│   │   ├── lambda_function.py
-│   │   ├── requirements.txt
-│   │   ├── requirements-test.txt
-│   │   └── test_lambda_function.py
-│   │
-│   ├── aggregate-timeframe/         # Aggregates 1m candles to larger timeframes
-│   │   ├── lambda_function.py
-│   │   ├── requirements.txt
-│   │   ├── requirements-test.txt
-│   │   └── test_aggregate.py
-│   │
-│   └── calculate-ta/                # Calculates technical indicators
-│       ├── lambda_function.py
-│       ├── requirements.txt
-│       ├── requirements-test.txt
-│       ├── test_ema.py
-│       ├── test_rsi.py
-│       ├── test_macd.py
-│       ├── test_data_utils.py
-│       ├── sample_market_data.csv
-│       └── TESTS.md
-│
-├── infra/                            # Terraform infrastructure as code
-│   ├── main.tf                      # Main infrastructure definition
-│   ├── variables.tf                 # Configuration variables
-│   ├── version.tf                   # Terraform version requirements
-│   ├── dynamodb.tf                  # DynamoDB table definition
-│   ├── lambda_functions.tf          # Lambda function configuration
-│   ├── api_gateway.tf               # HTTP API Gateway setup
-│   ├── cloudwatch_event_scheduler.tf # EventBridge scheduling
-│   ├── backend.tf                   # Terraform backend configuration
-│   └── SCHEDULER_CONFIGURATION.md   # Documentation for scheduler setup
-│
-├── build.py                         # Build script for packaging Lambdas
-├── run_tests.py                     # Test runner for all Lambda functions
-└── README.md                        # This file
+├── .github/
+│   └── workflows/
+│       └── deploy.yml             # GitHub Actions CI/CD workflow
+├── app/
+│   ├── lambdas/                   # Lambda function source code
+│   │   ├── aggregate-timeframe/   # Aggregates 1m candles to larger timeframes
+│   │   ├── ai-analysis/           # AI-based market analysis
+│   │   ├── calculate-ta/          # Calculates technical indicators (EMA, RSI, MACD)
+│   │   ├── export-data-to-s3/     # Exports data to Amazon S3
+│   │   ├── fetch-market-data/     # Fetches OHLC data from Kraken API
+│   │   ├── rerun-controller/      # Manages and controls the rerunning of Lambda functions
+│   │   ├── rerun-fetch-market-data/ # Specifically handles rerunning the market data fetch
+│   │   ├── send-to-slack/         # Sends alerts and notifications to Slack
+│   │   └── trigger-data-export/   # Triggers data export processes
+│   ├── layers/                    # Shared Lambda layers
+│   └── web/                       # Web components (if any)
+├── infra/                         # Terraform infrastructure as code
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── version.tf
+│   ├── dynamodb.tf
+│   ├── lambda_functions.tf
+│   ├── api_gateway.tf
+│   ├── cloudwatch_event_scheduler.tf
+│   ├── backend.tf
+│   └── SCHEDULER_CONFIGURATION.md
+├── build.py                       # Build script for packaging Lambdas
+├── run_tests.py                   # Test runner for all Lambda functions
+└── README.md                      # This file
 ```
 
 ### Component Descriptions
@@ -67,6 +58,12 @@ The system runs on automated schedules via AWS EventBridge and can be triggered 
 | **fetch-market-data** | Calls Kraken API to fetch 1-minute OHLC data for configured symbols and stores in DynamoDB |
 | **aggregate-timeframe** | Groups 1-minute candles into larger timeframes (5m, 15m, etc.) and calculates OHLCV + derived metrics (VWAP, Heikin-Ashi, typical price) |
 | **calculate-ta** | Computes EMA, RSI, and MACD technical indicators on aggregated candles and stores results in DynamoDB |
+| **ai-analysis** | Performs AI-driven market analysis |
+| **export-data-to-s3** | Exports historical or aggregated data to Amazon S3 |
+| **rerun-controller** | Manages and controls the rerunning of various Lambda functions |
+| **rerun-fetch-market-data** | Specifically handles rerunning the market data fetching process |
+| **send-to-slack** | Sends alerts and notifications to a configured Slack channel |
+| **trigger-data-export** | Triggers the data export workflow |
 
 ## How to Build
 
@@ -190,6 +187,30 @@ python -m pytest app/calculate-ta/test_ema.py -v
 
 - **State lock error** - Remove `.terraform.lock.hcl` and retry
 - **AWS credentials not found** - Configure AWS CLI: `aws configure`
+
+## CI/CD
+
+This project uses GitHub Actions for automated continuous integration and deployment.
+
+### Workflow Overview
+
+The deployment workflow (`.github/workflows/deploy.yml`) is triggered on:
+- Pushes to the `main` branch that include changes to `.py`, `.tf`, or `requirements*.txt` files.
+- Manual trigger via `workflow_dispatch`.
+
+### Pipeline Stages
+
+1. **Build Stage**:
+   - Sets up Python environment.
+   - Runs all Lambda function tests using `run_tests.py`.
+   - Builds Lambda deployment packages using `build.py`.
+   - Uploads the built packages as artifacts.
+
+2. **Terraform Stage**:
+   - Downloads the build artifacts.
+   - Sets up Terraform.
+   - Configures AWS credentials using OIDC.
+   - Runs `terraform apply` to deploy the infrastructure and updated Lambda functions.
 
 ## Additional Documentation
 
