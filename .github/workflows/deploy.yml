@@ -92,7 +92,7 @@ jobs:
         env:
           TF_VAR_lambda_env: |
             {
-              "ai-analysis": {
+              "send-to-slack": {
                 "SLACK_WEBHOOK_URL": "${{ secrets.SLACK_WEBHOOK_URL }}"
               }
             }
