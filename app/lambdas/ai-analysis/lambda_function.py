@@ -17,10 +17,10 @@ table = dynamodb.Table(TABLE_NAME)
 MODEL_ID = os.environ.get("LLM_MODEL_ID", "google.gemma-3-4b-it")
 
 def log_info(message, **kwargs):
-    logger.info(f"{message} | {json.dumps(kwargs)}")
+    logger.info(f"{message} | {kwargs}")
 
 def log_error(message, **kwargs):
-    logger.error(f"{message} | {json.dumps(kwargs)}")
+    logger.error(f"{message} | {kwargs}")
 
 def D(x):
     return Decimal(str(x)) if x is not None else None
@@ -34,7 +34,7 @@ def fetch_data(pair, timeframe, lookback_minutes=60):
     sk_start = f"TF#{timeframe}#TS#{start_ts}"
     sk_end = f"TF#{timeframe}#TS#{end_ts}"
     
-    print(f"Fetching data for {pk} from {sk_start} to {sk_end} (last {lookback_minutes} minutes)")
+    log_info("Fetching data", pk=pk, sk_start=sk_start, sk_end=sk_end, lookback_minutes=lookback_minutes)
 
     query_params = {
         "KeyConditionExpression": "PK = :pk AND SK BETWEEN :sk_start AND :sk_end",
@@ -115,7 +115,7 @@ def lambda_handler(event, context):
     # Note: The user asked for 'last 1 hour 1-minute market data and TAs'
     # So we query the 1m timeframe
     data = fetch_data(symbol, "1m", lookback_minutes=60)
-    print(f"Fetched {len(data)} records for {symbol} 1m data")
+    log_info("Fetched records", symbol=symbol, count=len(data))
 
     if not data:
         return {"status": "error", "message": "No 1m data found"}
@@ -227,10 +227,8 @@ DATA:
             "message": "Error calling Bedrock"
         }
 
-    # 4. Print result to console (CloudWatch Logs)
-    print("--- AI ANALYSIS RESULT ---")
-    print(analysis_result)
-    print("---------------------------")
+    # 4. Log result to CloudWatch Logs
+    log_info("AI Analysis Result", result=analysis_result)
 
     return {
         "status": "success",
