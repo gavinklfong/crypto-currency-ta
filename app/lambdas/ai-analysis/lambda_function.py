@@ -2,16 +2,14 @@ import os
 import boto3
 import json
 import logging
-import decimal
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
-import urllib.request
-
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 dynamodb = boto3.resource("dynamodb")
 bedrock_runtime = boto3.client("bedrock-runtime")
+sns = boto3.client("sns")
 
 TABLE_NAME = "crypto-currency-ta-market-data"
 table = dynamodb.Table(TABLE_NAME)
@@ -88,18 +86,12 @@ def call_bedrock(prompt):
         log_error("Bedrock invocation failed", error=str(e))
         raise Exception(f"Bedrock invocation failed: {str(e)}")
 
-def send_to_slack(text: str):
-    webhook = os.environ["SLACK_WEBHOOK_URL"]
-    data = json.dumps({"text": text}).encode("utf-8")
-
-    req = urllib.request.Request(
-        webhook,
-        data=data,
-        headers={"Content-Type": "application/json"}
+def send_to_sns(text: str):
+    sns_topic_arn = os.environ["SNS_TOPIC_ARN"]
+    return sns.publish(
+        TopicArn=sns_topic_arn,
+        Message=text
     )
-
-    with urllib.request.urlopen(req) as resp:
-        return resp.read().decode("utf-8")
 
 def lambda_handler(event, context):
     log_info("AI Analysis Lambda triggered", event=json.dumps(event))
@@ -227,7 +219,7 @@ DATA:
 
     try:
         analysis_result = call_bedrock(prompt)
-        send_to_slack(analysis_result)
+        send_to_sns(analysis_result)
     except Exception as e:
         log_error("Bedrock analysis failed", error=str(e))
         return {

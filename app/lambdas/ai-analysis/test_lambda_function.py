@@ -19,11 +19,11 @@ def test_lambda_handler_bedrock_failure(mock_table, mock_bedrock, mock_fetch):
     assert response["status"] == "error"
     assert "Error calling Bedrock" in response["message"]
 
-@patch("lambda_function.send_to_slack")
+@patch("lambda_function.send_to_sns")
 @patch("lambda_function.call_bedrock")
 @patch("lambda_function.fetch_data")
-def test_lambda_handler_sqsevent(mock_fetch, mock_bedrock, mock_slack):
-    with patch.dict(os.environ, {"SLACK_WEBHOOK_URL": "https://mock.webhook.url"}):
+def test_lambda_handler_sqsevent(mock_fetch, mock_bedrock, mock_sns):
+    with patch.dict(os.environ, {"SNS_TOPIC_ARN": "arn:aws:sns:us-east-1:123456789012:MockTopic"}):
         mock_fetch.return_value = [
             {
                 "open": 1.0,
