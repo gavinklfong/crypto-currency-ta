@@ -18,6 +18,12 @@ variable "export_bucket_name" {
   default     = "crypto-currency-ta-exports"
 }
 
+variable "ta_job_scripts_bucket_name" {
+  description = "Name of the S3 bucket for TA job scripts"
+  type        = string
+  default     = "crypto-currency-ta-scripts"
+}
+
 ########################################
 # API gateway Configuration
 ########################################
@@ -166,6 +172,11 @@ variable "lambdas" {
     "rerun-fetch-market-data" = {
       function_name = "rerun-fetch-market-data"
       zip_path      = "../build/package/lambdas/rerun-fetch-market-data.zip"
+    }
+
+    "ec2-job-launcher" = {
+      function_name = "ec2-job-launcher"
+      zip_path      = "../build/package/lambdas/ec2-job-launcher.zip"
     }
 
     "ai-analysis" = {

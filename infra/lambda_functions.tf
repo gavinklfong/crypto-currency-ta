@@ -27,6 +27,10 @@ resource "aws_lambda_function" "lambda" {
     variables = merge(
       each.value.environment,
       lookup(var.lambda_env, each.key, {}),
+      each.key == "ec2-job-launcher" ? {
+        LAUNCH_TEMPLATE_ID = aws_launch_template.ec2_worker_lt.id
+        TA_JOB_SCRIPTS_BUCKET_NAME = aws_s3_bucket.ta_job_scripts.id
+      } : {},
       {
         SNS_TOPIC_ARN = aws_sns_topic.slack_notifications.arn
       }

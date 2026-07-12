@@ -1,0 +1,1 @@
+# No external dependencies required for the Lambda itself as boto3 is provided
