@@ -60,6 +60,8 @@ sudo shutdown -h now
     try:
         response = ec2.run_instances(
             LaunchTemplate={'LaunchTemplateId': launch_template_id},
+            MinCount=1,
+            MaxCount=1,
             UserData=base64.b64encode(full_user_data.encode('utf-8')).decode('utf-8')
         )
         

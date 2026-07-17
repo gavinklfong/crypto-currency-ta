@@ -119,6 +119,41 @@ resource "aws_iam_role_policy" "lambda_sns_publish" {
   })
 }
 
+resource "aws_iam_role_policy" "lambda_iam_pass_role" {
+  name = "lambda-iam-pass-role-policy"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "iam:PassRole"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "lambda_ec2_run_instances" {
+  name = "lambda-ec2-run-instances-policy"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ec2:RunInstances",
+        "ec2:CreateTags"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+
+
 ########################################
 # Lambda Layers
 ########################################
