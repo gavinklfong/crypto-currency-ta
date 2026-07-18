@@ -8,6 +8,7 @@ ec2 = boto3.client('ec2')
 def lambda_handler(event, context):
     launch_template_id = os.environ.get('LAUNCH_TEMPLATE_ID')
     scripts_bucket = os.environ.get('TA_JOB_SCRIPTS_BUCKET_NAME')
+    job_script_name = os.environ.get('JOB_SCRIPT_NAME')
     print(f"Received event: {json.dumps(event)}")
     
     detail = event.get('detail', {})
@@ -35,6 +36,13 @@ def lambda_handler(event, context):
             'body': json.dumps({'error': 'TA_JOB_SCRIPTS_BUCKET_NAME not set'})
         }
 
+    if not job_script_name:
+        print("Error: JOB_SCRIPT_NAME environment variable is not set.")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': 'JOB_SCRIPT_NAME not set'})
+        }
+
     # Construct UserData script
     # The script will download the TA job from S3
     full_user_data = f"""#!/bin/bash
@@ -46,10 +54,10 @@ yum install -y python3-pip aws-cli
 pip3 install pandas numpy requests
 
 # Download the TA job script from S3
-aws s3 cp s3://{scripts_bucket}/ta_job.py /tmp/ta_job.py
+aws s3 cp s3://{scripts_bucket}/{job_script_name} /tmp/{job_script_name}
 
 # Execute the TA job
-python3 /tmp/ta_job.py {symbol} {timeframe}
+python3 /tmp/{job_script_name} {symbol} {timeframe}
 
 # Shutdown the instance
 sudo shutdown -h now

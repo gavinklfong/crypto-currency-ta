@@ -24,6 +24,14 @@ variable "ta_job_scripts_bucket_name" {
   default     = "crypto-currency-ta-scripts"
 }
 
+variable "job_scripts" {
+  description = "Map of job script names to their local file paths"
+  type        = map(string)
+  default     = {
+    "ta_job.py" = "app/scripts/ta_job.py"
+  }
+}
+
 ########################################
 # API gateway Configuration
 ########################################
@@ -125,6 +133,7 @@ variable "lambdas" {
     timeframes         = optional(list(string), [])
     schedule_overrides = optional(map(string), {})
     environment        = optional(map(string), {})
+    is_launcher        = optional(bool, false)
   }))
   default = {
 
@@ -177,6 +186,10 @@ variable "lambdas" {
     "ec2-job-launcher" = {
       function_name = "ec2-job-launcher"
       zip_path      = "../build/package/lambdas/ec2-job-launcher.zip"
+      is_launcher   = true
+      environment   = {
+        JOB_SCRIPT_NAME = "ta_job.py"
+      }
     }
 
     "ai-analysis" = {

@@ -35,9 +35,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "ta_job_scripts" {
   }
 }
 
-resource "aws_s3_object" "ta_job_script" {
+resource "aws_s3_object" "job_scripts" {
+  for_each = var.job_scripts
+
   bucket = aws_s3_bucket.ta_job_scripts.id
-  key    = "ta_job.py"
-  source = "${path.module}/../app/scripts/ta_job.py"
-  etag   = filemd5("${path.module}/../app/scripts/ta_job.py")
+  key    = each.key
+  source = "${path.module}/../${each.value}"
+  etag   = filemd5("${path.module}/../${each.value}")
 }
