@@ -10,7 +10,8 @@ class TestLambdaHandler(unittest.TestCase):
     @patch('lambda_function.ec2')
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
-        'TA_JOB_SCRIPTS_BUCKET_NAME': 'test-bucket'
+        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
+        'JOB_SCRIPT_NAME': 'ta_job.py'
     })
     def test_lambda_handler_success(self, mock_ec2):
         # Arrange
@@ -80,7 +81,8 @@ class TestLambdaHandler(unittest.TestCase):
         body = json.loads(response['body'])
         self.assertTrue(
             'LAUNCH_TEMPLATE_ID not set' in body['error'] or 
-            'TA_JOB_SCRIPTS_BUCKET_NAME not set' in body['error']
+            'JOB_SCRIPTS_BUCKET_NAME not set' in body['error'] or
+            'JOB_SCRIPT_NAME not set' in body['error']
         )
 
 if __name__ == '__main__':

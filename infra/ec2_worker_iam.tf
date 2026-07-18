@@ -50,8 +50,8 @@ resource "aws_iam_role_policy" "ec2_worker_policy" {
         Resource = [
           aws_s3_bucket.market_data_export.arn,
           "${aws_s3_bucket.market_data_export.arn}/*",
-          aws_s3_bucket.ta_job_scripts.arn,
-          "${aws_s3_bucket.ta_job_scripts.arn}/*"
+          aws_s3_bucket.job_scripts.arn,
+          "${aws_s3_bucket.job_scripts.arn}/*"
         ]
       },
       {

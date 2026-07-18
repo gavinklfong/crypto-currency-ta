@@ -8,7 +8,7 @@ locals {
     for key, val in var.lambdas :
     key => {
       LAUNCH_TEMPLATE_ID          = aws_launch_template.ec2_worker_lt.id
-      TA_JOB_SCRIPTS_BUCKET_NAME = aws_s3_bucket.ta_job_scripts.id
+      JOB_SCRIPTS_BUCKET_NAME      = aws_s3_bucket.job_scripts.id
     }
     if val.is_launcher
   }

@@ -7,7 +7,7 @@ ec2 = boto3.client('ec2')
 
 def lambda_handler(event, context):
     launch_template_id = os.environ.get('LAUNCH_TEMPLATE_ID')
-    scripts_bucket = os.environ.get('TA_JOB_SCRIPTS_BUCKET_NAME')
+    scripts_bucket = os.environ.get('JOB_SCRIPTS_BUCKET_NAME')
     job_script_name = os.environ.get('JOB_SCRIPT_NAME')
     print(f"Received event: {json.dumps(event)}")
     
@@ -30,10 +30,10 @@ def lambda_handler(event, context):
         }
 
     if not scripts_bucket:
-        print("Error: TA_JOB_SCRIPTS_BUCKET_NAME environment variable is not set.")
+        print("Error: JOB_SCRIPTS_BUCKET_NAME environment variable is not set.")
         return {
             'statusCode': 500,
-            'body': json.dumps({'error': 'TA_JOB_SCRIPTS_BUCKET_NAME not set'})
+            'body': json.dumps({'error': 'JOB_SCRIPTS_BUCKET_NAME not set'})
         }
 
     if not job_script_name:
