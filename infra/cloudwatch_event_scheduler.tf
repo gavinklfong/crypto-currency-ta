@@ -123,22 +123,22 @@ resource "aws_lambda_permission" "allow_cloudwatch" {
 # Watchdog Schedule
 ########################################
 
-resource "aws_cloudwatch_event_rule" "watchdog_schedule" {
-  name                = "watchdog-schedule"
-  description         = "Schedule for the job watchdog lambda"
+resource "aws_cloudwatch_event_rule" "monitor_job_runner_schedule" {
+  name                = "monitor-job-runner-schedule"
+  description         = "Schedule for the monitor job runner lambda"
   schedule_expression = "rate(5 minutes)"
 }
 
-resource "aws_cloudwatch_event_target" "watchdog_target" {
-  rule      = aws_cloudwatch_event_rule.watchdog_schedule.name
-  target_id = "watchdog-target"
-  arn       = aws_lambda_function.lambda["watchdog-lambda"].arn
+resource "aws_cloudwatch_event_target" "monitor_job_runner_target" {
+  rule      = aws_cloudwatch_event_rule.monitor_job_runner_schedule.name
+  target_id = "monitor-job-runner-target"
+  arn       = aws_lambda_function.lambda["monitor-job-runner"].arn
 }
 
-resource "aws_lambda_permission" "allow_cloudwatch_watchdog" {
-  statement_id  = "AllowEventBridgeWatchdog"
+resource "aws_lambda_permission" "allow_cloudwatch_monitor_job_runner" {
+  statement_id  = "AllowEventBridgeMonitorJobRunner"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.lambda["watchdog-lambda"].function_name
+  function_name = aws_lambda_function.lambda["monitor-job-runner"].function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.watchdog_schedule.arn
+  source_arn    = aws_cloudwatch_event_rule.monitor_job_runner_schedule.arn
 }

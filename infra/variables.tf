@@ -212,9 +212,9 @@ variable "lambdas" {
       zip_path      = "../build/package/lambdas/send-to-slack.zip"
     }
 
-    "watchdog-lambda" = {
-      function_name = "watchdog-lambda"
-      zip_path      = "../build/package/lambdas/watchdog-lambda.zip"
+    "monitor-job-runner" = {
+      function_name = "monitor-job-runner"
+      zip_path      = "../build/package/lambdas/monitor-job-runner.zip"
       timeframes    = []
       environment   = {
         STALLED_THRESHOLD_MINUTES = "10"
