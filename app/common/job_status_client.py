@@ -1,5 +1,6 @@
 import boto3
 import os
+import threading
 from datetime import datetime, timezone
 
 class JobStatusClient:
@@ -71,3 +72,25 @@ class JobStatusClient:
                 ':e': error_msg
             }
         )
+
+class HeartbeatThread(threading.Thread):
+    def __init__(self, client, job_id, interval=60):
+        super().__init__()
+        self.client = client
+        self.job_id = job_id
+        self.interval = interval
+        self.stop_event = threading.Event()
+
+    def run(self):
+        print(f"Heartbeat thread started for job {self.job_id} (interval={self.interval}s)")
+        while not self.stop_event.is_set():
+            try:
+                self.client.heartbeat(self.job_id)
+            except Exception as e:
+                print(f"Heartbeat failed: {str(e)}")
+
+            self.stop_event.wait(self.interval)
+        print(f"Heartbeat thread stopped for job {self.job_id}")
+
+    def stop(self):
+        self.stop_event.set()
