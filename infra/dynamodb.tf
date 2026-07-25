@@ -77,12 +77,20 @@ resource "aws_dynamodb_table" "job_tracker" {
     type = "S"
   }
 
-  # GSI for monitoring stalled jobs
+  # GSI for monitoring stalled jobs (Requirement 2)
   # Allows querying for all RUNNING jobs where last_heartbeat is old.
   global_secondary_index {
     name               = "StatusHeartbeatIndex"
     hash_key           = "status"
     range_key          = "last_heartbeat"
+    projection_type    = "ALL"
+  }
+
+  # GSI for querying jobs by status ordered by creation time (Requirement 1)
+  global_secondary_index {
+    name               = "StatusStartTimeIndex"
+    hash_key           = "status"
+    range_key          = "start_time"
     projection_type    = "ALL"
   }
 
