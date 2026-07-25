@@ -15,6 +15,7 @@ locals {
 
   common_lambda_env = {
     SNS_TOPIC_ARN = aws_sns_topic.slack_notifications.arn
+    JOB_TRACKER_TABLE_NAME = aws_dynamodb_table.job_tracker.name
   }
 }
 

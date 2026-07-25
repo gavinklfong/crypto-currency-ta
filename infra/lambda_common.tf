@@ -37,7 +37,9 @@ resource "aws_iam_role_policy" "lambda_dynamodb_access" {
       ]
       Resource = [
         aws_dynamodb_table.market_data.arn,
-        "${aws_dynamodb_table.market_data.arn}/*"
+        "${aws_dynamodb_table.market_data.arn}/*",
+        aws_dynamodb_table.job_tracker.arn,
+        "${aws_dynamodb_table.job_tracker.arn}/*"
       ]
     }]
   })
@@ -153,11 +155,7 @@ resource "aws_iam_role_policy" "lambda_ec2_run_instances" {
 }
 
 
-
-########################################
 # Lambda Layers
-########################################
-
 resource "aws_lambda_layer_version" "layers" {
   for_each = var.layers
 

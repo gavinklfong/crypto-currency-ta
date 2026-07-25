@@ -31,7 +31,7 @@ locals {
     ]
   ])
 
-  # 3. Map targets for the aws_cloudwatch_event_target resource
+  # 3. Map targets to the aws_cloudwatch_event_target resource
   targets_map = {
     for target in local.raw_targets : target.target_key => target
   }
@@ -117,4 +117,28 @@ resource "aws_lambda_permission" "allow_cloudwatch" {
   function_name = aws_lambda_function.lambda[each.value.lambda_key].function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.schedule[local.target_to_rule_map[each.key]].arn
+}
+
+########################################
+# Watchdog Schedule
+########################################
+
+resource "aws_cloudwatch_event_rule" "watchdog_schedule" {
+  name                = "watchdog-schedule"
+  description         = "Schedule for the job watchdog lambda"
+  schedule_expression = "rate(5 minutes)"
+}
+
+resource "aws_cloudwatch_event_target" "watchdog_target" {
+  rule      = aws_cloudwatch_event_rule.watchdog_schedule.name
+  target_id = "watchdog-target"
+  arn       = aws_lambda_function.lambda["watchdog-lambda"].arn
+}
+
+resource "aws_lambda_permission" "allow_cloudwatch_watchdog" {
+  statement_id  = "AllowEventBridgeWatchdog"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.lambda["watchdog-lambda"].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.watchdog_schedule.arn
 }

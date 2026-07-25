@@ -87,6 +87,12 @@ def build_single_lambda(lambda_dir: Path):
         else:
             shutil.copy2(item, dest)
 
+    # Also copy common utilities
+    common_dir = ROOT / "app" / "common"
+    if common_dir.exists():
+        print(f"Copying common utilities from {common_dir}")
+        shutil.copytree(common_dir, temp_dir / "common", dirs_exist_ok=True)
+
     # 5. Create ZIP
     zip_path = PACKAGE_DIR / f"{lambda_name}.zip"
     with ZipFile(zip_path, "w", ZIP_DEFLATED) as zf:

@@ -8,6 +8,12 @@ variable "dynamodb_table_name" {
   default     = "crypto-currency-ta-market-data"
 }
 
+variable "job_tracker_table_name" {
+  description = "Name of the DynamoDB table for job tracking"
+  type        = string
+  default     = "crypto-currency-ta-job-tracker"
+}
+
 ########################################
 # S3 Configuration
 ########################################
@@ -189,6 +195,7 @@ variable "lambdas" {
       is_launcher   = true
       environment   = {
         JOB_SCRIPT_NAME = "ta_job.py"
+        JOB_TRACKER_TABLE_NAME = "crypto-currency-ta-job-tracker"
       }
     }
 
@@ -204,6 +211,14 @@ variable "lambdas" {
       function_name = "send-to-slack"
       zip_path      = "../build/package/lambdas/send-to-slack.zip"
     }
+
+    "watchdog-lambda" = {
+      function_name = "watchdog-lambda"
+      zip_path      = "../build/package/lambdas/watchdog-lambda.zip"
+      timeframes    = []
+      environment   = {
+        STALLED_THRESHOLD_MINUTES = "10"
+      }
+    }
   }
 }
-
