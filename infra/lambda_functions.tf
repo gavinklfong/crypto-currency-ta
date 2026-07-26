@@ -17,6 +17,11 @@ locals {
     SNS_TOPIC_ARN = aws_sns_topic.slack_notifications.arn
     JOB_TRACKER_TABLE_NAME = aws_dynamodb_table.job_tracker.name
   }
+
+  # Map of special lambdas to their custom IAM roles
+  lambda_roles = {
+    "ec2-reaper" = aws_iam_role.ec2_reaper_role.arn
+  }
 }
 
 resource "aws_lambda_function" "lambda" {
@@ -30,7 +35,7 @@ resource "aws_lambda_function" "lambda" {
   filename         = each.value.zip_path
   source_code_hash = filebase64sha256(each.value.zip_path)
 
-  role = aws_iam_role.lambda_exec.arn
+  role = lookup(local.lambda_roles, each.key, each.value.role_arn != null ? each.value.role_arn : aws_iam_role.lambda_exec.arn)
 
   layers = [
     for layer_name in each.value.layers :

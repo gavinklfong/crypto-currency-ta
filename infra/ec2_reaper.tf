@@ -1,25 +1,3 @@
-# EC2 Reaper Lambda Configuration
-
-resource "aws_lambda_function" "ec2_reaper" {
-  function_name = "ec2-reaper"
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  timeout       = 60
-
-  filename         = "../build/package/lambdas/ec2-reaper.zip"
-  source_code_hash = filebase64sha256("../build/package/lambdas/ec2-reaper.zip")
-
-  role = aws_iam_role.ec2_reaper_role.arn
-
-  environment {
-    variables = {
-      JOB_TRACKER_TABLE_NAME    = aws_dynamodb_table.job_tracker.name
-      MAX_INACTIVITY_MINUTES    = "30"
-      MAX_LIFETIME_HOURS        = "8"
-    }
-  }
-}
-
 # IAM Role for EC2 Reaper
 resource "aws_iam_role" "ec2_reaper_role" {
   name = "ec2-reaper-role"

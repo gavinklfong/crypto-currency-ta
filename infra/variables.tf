@@ -139,6 +139,7 @@ variable "lambdas" {
     timeframes         = optional(list(string), [])
     schedule_overrides = optional(map(string), {})
     environment        = optional(map(string), {})
+    role_arn           = optional(string)
     is_launcher        = optional(bool, false)
   }))
   default = {
@@ -218,6 +219,16 @@ variable "lambdas" {
       timeframes    = []
       environment   = {
         STALLED_THRESHOLD_MINUTES = "10"
+      }
+    }
+
+    "ec2-reaper" = {
+      function_name = "ec2-reaper"
+      zip_path      = "../build/package/lambdas/ec2-reaper.zip"
+      environment   = {
+        JOB_TRACKER_TABLE_NAME    = var.job_tracker_table_name
+        MAX_INACTIVITY_MINUTES    = "30"
+        MAX_LIFETIME_HOURS        = "8"
       }
     }
   }
