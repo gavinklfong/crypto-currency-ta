@@ -7,16 +7,24 @@ from common.job_status_client import JobStatusClient
 
 ec2 = boto3.client('ec2')
 
+INSTANCE_TYPE_MAP = {
+    "small": "t3.small",
+    "medium": "t3.medium",
+    "large": "t3.large"
+}
+
 def lambda_handler(event, context):
     launch_template_id = os.environ.get('LAUNCH_TEMPLATE_ID')
     scripts_bucket = os.environ.get('JOB_SCRIPTS_BUCKET_NAME')
     job_script_name = os.environ.get('JOB_SCRIPT_NAME')
+    default_instance_type_key = os.environ.get('INSTANCE_TYPE', 'small')
 
     print(f"Received event: {json.dumps(event)}")
 
     detail = event.get('detail', {})
     symbol = detail.get('symbol')
     timeframe = detail.get('timeframe')
+    event_instance_type_key = detail.get('instance_type')
 
     if not symbol or not timeframe:
         print("Error: Missing symbol or timeframe in event detail")
@@ -45,6 +53,11 @@ def lambda_handler(event, context):
             'statusCode': 500,
             'body': json.dumps({'error': 'JOB_SCRIPT_NAME not set'})
         }
+
+    # Resolve instance type
+    instance_type_key = event_instance_type_key or default_instance_type_key
+    aws_instance_type = INSTANCE_TYPE_MAP.get(instance_type_key, INSTANCE_TYPE_MAP['small'])
+    print(f"Selected instance type: {aws_instance_type} (from key: {instance_type_key})")
 
     # Generate a unique job ID
     job_id = str(uuid.uuid4())
@@ -93,11 +106,12 @@ python3 /tmp/{job_script_name}/main.py {symbol} {timeframe} {job_id}
 sudo shutdown -h now
 """
 
-    print(f"Launching EC2 instance with Launch Template: {launch_template_id}")
+    print(f"Launching EC2 instance with Launch Template: {launch_template_id} and Instance Type: {aws_instance_type}")
 
     try:
         response = ec2.run_instances(
             LaunchTemplate={'LaunchTemplateId': launch_template_id},
+            InstanceType=aws_instance_type,
             MinCount=1,
             MaxCount=1,
             UserData=base64.b64encode(full_user_data.encode('utf-8')).decode('utf-8')

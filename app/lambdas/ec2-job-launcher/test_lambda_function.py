@@ -12,7 +12,8 @@ class TestLambdaHandler(unittest.TestCase):
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
         'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
-        'JOB_SCRIPT_NAME': 'ta_job'
+        'JOB_SCRIPT_NAME': 'ta_job',
+        'INSTANCE_TYPE': 'medium'
     })
     def test_lambda_handler_success(self, mock_ec2, mock_job_status_class):
         # Arrange
@@ -42,6 +43,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Verify run_instances was called with correct parameters
         args, kwargs = mock_ec2.run_instances.call_args
         self.assertEqual(kwargs['LaunchTemplate']['LaunchTemplateId'], 'lt-12345678')
+        self.assertEqual(kwargs['InstanceType'], 't3.medium')
 
         # Check if symbol and timeframe are in UserData
         user_data_encoded = kwargs['UserData']
@@ -51,6 +53,63 @@ class TestLambdaHandler(unittest.TestCase):
         self.assertIn('aws s3 cp s3://test-bucket/ta_job/ /tmp/ta_job/ --recursive', user_data)
         self.assertIn('pip3 install -r /tmp/ta_job/requirements.txt', user_data)
         self.assertIn('python3 /tmp/ta_job/main.py', user_data)
+
+    @patch('lambda_function.JobStatusClient')
+    @patch('lambda_function.ec2')
+    @patch.dict(os.environ, {
+        'LAUNCH_TEMPLATE_ID': 'lt-12345678',
+        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
+        'JOB_SCRIPT_NAME': 'ta_job',
+        'INSTANCE_TYPE': 'small'
+    })
+    def test_lambda_handler_event_override(self, mock_ec2, mock_job_status_class):
+        # Arrange
+        event = {
+            'detail': {
+                'symbol': 'XBTUSD',
+                'timeframe': '1h',
+                'instance_type': 'large'
+            }
+        }
+        context = MagicMock()
+        mock_ec2.run_instances.return_value = {'Instances': [{'InstanceId': 'i-0123456789abcdef0'}]}
+        mock_job_status_instance = mock_job_status_class.return_value
+
+        # Act
+        response = lambda_handler(event, context)
+
+        # Assert
+        self.assertEqual(response['statusCode'], 200)
+        args, kwargs = mock_ec2.run_instances.call_args
+        self.assertEqual(kwargs['InstanceType'], 't3.large')
+
+    @patch('lambda_function.JobStatusClient')
+    @patch('lambda_function.ec2')
+    @patch.dict(os.environ, {
+        'LAUNCH_TEMPLATE_ID': 'lt-12345678',
+        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
+        'JOB_SCRIPT_NAME': 'ta_job',
+        'INSTANCE_TYPE': 'invalid'
+    })
+    def test_lambda_handler_invalid_env_type_fallback(self, mock_ec2, mock_job_status_class):
+        # Arrange
+        event = {
+            'detail': {
+                'symbol': 'XBTUSD',
+                'timeframe': '1h'
+            }
+        }
+        context = MagicMock()
+        mock_ec2.run_instances.return_value = {'Instances': [{'InstanceId': 'i-0123456789abcdef0'}]}
+        mock_job_status_instance = mock_job_status_class.return_value
+
+        # Act
+        response = lambda_handler(event, context)
+
+        # Assert
+        self.assertEqual(response['statusCode'], 200)
+        args, kwargs = mock_ec2.run_instances.call_args
+        self.assertEqual(kwargs['InstanceType'], 't3.small')
 
     @patch('lambda_function.JobStatusClient')
     @patch.dict(os.environ, {

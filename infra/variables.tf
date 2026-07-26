@@ -195,6 +195,7 @@ variable "lambdas" {
       is_launcher   = true
       environment   = {
         JOB_SCRIPT_NAME = "ta_job"
+        INSTANCE_TYPE   = "small"
       }
     }
 
