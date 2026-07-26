@@ -27,11 +27,11 @@ def find_lambda_functions():
     return sorted(lambdas)
 
 
-def run_command(cmd, cwd=None):
+def run_command(cmd, cwd=None, env=None):
     """Run a shell command and return success status."""
     print(f"→ {' '.join(cmd)}")
     try:
-        subprocess.check_call(cmd, cwd=cwd)
+        subprocess.check_call(cmd, cwd=cwd, env=env)
         return True
     except subprocess.CalledProcessError:
         return False
@@ -88,7 +88,13 @@ def main():
         
         # Run pytest
         print(f"\n🧪 Running pytest...")
-        if not run_command(["pytest", "-v"], cwd=lambda_dir):
+
+        # Set up environment with app in PYTHONPATH
+        test_env = os.environ.copy()
+        app_dir = ROOT / "app"
+        test_env["PYTHONPATH"] = str(app_dir) + os.pathsep + test_env.get("PYTHONPATH", "")
+
+        if not run_command(["pytest", "-v"], cwd=lambda_dir, env=test_env):
             print(f"❌ Tests failed for {lambda_dir.name}")
             all_passed = False
         else:
