@@ -73,17 +73,17 @@ def lambda_handler(event, context):
         }
 
     # Construct UserData script
-    # The script will download the TA job from S3
+    # The script will download the TA job directory from S3
     full_user_data = f"""#!/bin/bash
 # Update and install dependencies
 yum update -y
 yum install -y python3-pip aws-cli
 
-# Install required python packages
-pip3 install pandas numpy requests boto3
+# Download the TA job directory from S3
+aws s3 cp s3://{scripts_bucket}/{job_script_name}/ /tmp/{job_script_name}/ --recursive
 
-# Download the TA job script from S3
-aws s3 cp s3://{scripts_bucket}/{job_script_name} /tmp/{job_script_name}
+# Install job-specific dependencies
+pip3 install -r /tmp/{job_script_name}/requirements.txt
 
 # Download the common utilities from S3
 aws s3 cp s3://{scripts_bucket}/common/ /tmp/common/ --recursive
@@ -91,8 +91,8 @@ aws s3 cp s3://{scripts_bucket}/common/ /tmp/common/ --recursive
 # Export PYTHONPATH so common can be found
 export PYTHONPATH=$PYTHONPATH:/tmp
 
-# Execute the TA job
-python3 /tmp/{job_script_name} {symbol} {timeframe} {job_id}
+# Execute the TA job main script
+python3 /tmp/{job_script_name}/main.py {symbol} {timeframe} {job_id}
 
 # Shutdown the instance
 sudo shutdown -h now

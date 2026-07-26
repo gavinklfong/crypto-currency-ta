@@ -31,10 +31,10 @@ variable "job_scripts_bucket_name" {
 }
 
 variable "job_scripts" {
-  description = "Map of job script names to their local file paths"
+  description = "Map of job script folder names to their local directory paths"
   type        = map(string)
   default     = {
-    "ta_job.py" = "app/scripts/ta_job.py"
+    "ta_job" = "app/scripts/ta_job"
   }
 }
 
@@ -194,7 +194,7 @@ variable "lambdas" {
       zip_path      = "../build/package/lambdas/ec2-job-launcher.zip"
       is_launcher   = true
       environment   = {
-        JOB_SCRIPT_NAME = "ta_job.py"
+        JOB_SCRIPT_NAME = "ta_job"
         JOB_TRACKER_TABLE_NAME = "crypto-currency-ta-job-tracker"
       }
     }

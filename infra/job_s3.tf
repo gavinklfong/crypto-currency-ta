@@ -35,11 +35,20 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "job_scripts" {
   }
 }
 
+locals {
+  job_files = merge([
+    for job_name, job_path in var.job_scripts : {
+      for f in fileset("${path.module}/../${job_path}", "**") :
+      "${job_name}/${f}" => "${path.module}/../${job_path}/${f}"
+    }
+  ]...)
+}
+
 resource "aws_s3_object" "job_scripts" {
-  for_each = var.job_scripts
+  for_each = local.job_files
 
   bucket = aws_s3_bucket.job_scripts.id
   key    = each.key
-  source = "${path.module}/../${each.value}"
-  etag   = filemd5("${path.module}/../${each.value}")
+  source = each.value
+  etag   = filemd5(each.value)
 }
