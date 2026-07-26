@@ -114,7 +114,16 @@ sudo shutdown -h now
             InstanceType=aws_instance_type,
             MinCount=1,
             MaxCount=1,
-            UserData=base64.b64encode(full_user_data.encode('utf-8')).decode('utf-8')
+            UserData=base64.b64encode(full_user_data.encode('utf-8')).decode('utf-8'),
+            TagSpecifications=[
+                {
+                    'ResourceType': 'instance',
+                    'Tags': [
+                        {'Key': 'ManagedBy', 'Value': 'CryptoTA-JobLauncher'},
+                        {'Key': 'JobId', 'Value': job_id}
+                    ]
+                }
+            ]
         )
 
         instance_id = response['Instances'][0]['InstanceId']

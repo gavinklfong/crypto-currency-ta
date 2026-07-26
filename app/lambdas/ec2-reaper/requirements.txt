@@ -1,0 +1,1 @@
+# No external dependencies required for the Reaper Lambda as boto3 is provided

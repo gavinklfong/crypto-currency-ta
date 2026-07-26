@@ -74,18 +74,25 @@ class JobStatusClient:
             }
         )
 
-    def fail_job(self, job_id, error_msg):
-        """Mark the job as failed."""
-        now = datetime.now(timezone.utc).isoformat()
-        self.table.update_item(
-            Key={'PK': f'JOB#{job_id}', 'SK': 'METADATA'},
-            UpdateExpression="SET status = :s, end_time = :now, error_msg = :e",
-            ExpressionAttributeValues={
-                ':s': 'FAILED',
-                ':now': now,
-                ':e': error_msg
-            }
-        )
+    def get_running_jobs(self):
+        """Returns a list of all currently running jobs using the StatusStartTimeIndex GSI."""
+        running_jobs = []
+        query_kwargs = {
+            'IndexName': 'StatusStartTimeIndex',
+            'KeyConditionExpression': '#s = :status',
+            'ExpressionAttributeNames': {'#s': 'status'},
+            'ExpressionAttributeValues': {':status': 'RUNNING'}
+        }
+
+        while True:
+            response = self.table.query(**query_kwargs)
+            running_jobs.extend(response.get('Items', []))
+
+            if 'LastEvaluatedKey' not in response:
+                break
+            query_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+
+        return running_jobs
 
 class HeartbeatThread(threading.Thread):
     def __init__(self, client, job_id, interval=60):
