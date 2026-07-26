@@ -49,6 +49,18 @@ class JobStatusClient:
             }
         )
 
+    def report_progress_with_detail(self, job_id, progress, detail):
+        """Update the progress percentage (0-100) and provide additional detail."""
+        self.table.update_item(
+            Key={'PK': f'JOB#{job_id}', 'SK': 'METADATA'},
+            UpdateExpression="SET progress = :p, progress_detail = :d, last_heartbeat = :now",
+            ExpressionAttributeValues={
+                ':p': progress,
+                ':d': detail,
+                ':now': datetime.now(timezone.utc).isoformat()
+            }
+        )
+
     def complete_job(self, job_id):
         """Mark the job as completed."""
         now = datetime.now(timezone.utc).isoformat()
