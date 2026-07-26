@@ -3,12 +3,14 @@ import os
 import threading
 from datetime import datetime, timezone
 
+JOB_TRACKER_TABLE_NAME = "crypto-currency-ta-job-tracker"
+
 class JobStatusClient:
     def __init__(self, table_name=None):
         self.dynamodb = boto3.resource('dynamodb')
-        self.table_name = table_name or os.environ.get('JOB_TRACKER_TABLE_NAME')
+        self.table_name = table_name or JOB_TRACKER_TABLE_NAME
         if not self.table_name:
-            raise ValueError("JOB_TRACKER_TABLE_NAME environment variable must be set")
+            raise ValueError("Table name must be provided or JOB_TRACKER_TABLE_NAME must be set")
         self.table = self.dynamodb.Table(self.table_name)
 
     def start_job(self, job_id, job_type, instance_id):

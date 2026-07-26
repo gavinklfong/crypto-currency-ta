@@ -11,7 +11,6 @@ def lambda_handler(event, context):
     launch_template_id = os.environ.get('LAUNCH_TEMPLATE_ID')
     scripts_bucket = os.environ.get('JOB_SCRIPTS_BUCKET_NAME')
     job_script_name = os.environ.get('JOB_SCRIPT_NAME')
-    job_tracker_table = os.environ.get('JOB_TRACKER_TABLE_NAME')
 
     print(f"Received event: {json.dumps(event)}")
 
@@ -47,19 +46,12 @@ def lambda_handler(event, context):
             'body': json.dumps({'error': 'JOB_SCRIPT_NAME not set'})
         }
 
-    if not job_tracker_table:
-        print("Error: JOB_TRACKER_TABLE_NAME environment variable is not set.")
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': 'JOB_TRACKER_TABLE_NAME not set'})
-        }
-
     # Generate a unique job ID
     job_id = str(uuid.uuid4())
 
     # Initialize Job Tracker
     try:
-        job_status = JobStatusClient(job_tracker_table)
+        job_status = JobStatusClient()
         job_status.start_job(
             job_id=job_id,
             job_type=job_script_name,
@@ -87,6 +79,9 @@ pip3 install -r /tmp/{job_script_name}/requirements.txt
 
 # Download the common utilities from S3
 aws s3 cp s3://{scripts_bucket}/common/ /tmp/common/ --recursive
+
+# Install common dependencies
+pip3 install -r /tmp/common/requirements.txt
 
 # Export PYTHONPATH so common can be found
 export PYTHONPATH=$PYTHONPATH:/tmp

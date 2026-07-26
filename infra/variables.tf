@@ -195,7 +195,6 @@ variable "lambdas" {
       is_launcher   = true
       environment   = {
         JOB_SCRIPT_NAME = "ta_job"
-        JOB_TRACKER_TABLE_NAME = "crypto-currency-ta-job-tracker"
       }
     }
 

@@ -12,8 +12,7 @@ class TestLambdaHandler(unittest.TestCase):
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
         'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
-        'JOB_SCRIPT_NAME': 'ta_job',
-        'JOB_TRACKER_TABLE_NAME': 'test-table'
+        'JOB_SCRIPT_NAME': 'ta_job'
     })
     def test_lambda_handler_success(self, mock_ec2, mock_job_status_class):
         # Arrange
@@ -57,8 +56,7 @@ class TestLambdaHandler(unittest.TestCase):
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
         'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
-        'JOB_SCRIPT_NAME': 'ta_job',
-        'JOB_TRACKER_TABLE_NAME': 'test-table'
+        'JOB_SCRIPT_NAME': 'ta_job'
     })
     def test_lambda_handler_missing_params(self, mock_job_status_class):
         # Arrange
@@ -99,8 +97,7 @@ class TestLambdaHandler(unittest.TestCase):
         self.assertTrue(
             'LAUNCH_TEMPLATE_ID not set' in body['error'] or
             'JOB_SCRIPTS_BUCKET_NAME not set' in body['error'] or
-            'JOB_SCRIPT_NAME not set' in body['error'] or
-            'JOB_TRACKER_TABLE_NAME not set' in body['error']
+            'JOB_SCRIPT_NAME not set' in body['error']
         )
 
 if __name__ == '__main__':
