@@ -74,6 +74,20 @@ class JobStatusClient:
             }
         )
 
+    def fail_job(self, job_id, reason):
+        """Mark the job as failed with a reason."""
+        now = datetime.now(timezone.utc).isoformat()
+        self.table.update_item(
+            Key={'PK': f'JOB#{job_id}', 'SK': 'METADATA'},
+            UpdateExpression="SET status = :s, end_time = :now, progress = :p, failure_reason = :e",
+            ExpressionAttributeValues={
+                ':s': 'FAILED',
+                ':now': now,
+                ':p': 0,
+                ':e': reason
+            }
+        )
+
     def get_running_jobs(self):
         """Returns a list of all currently running jobs using the StatusStartTimeIndex GSI."""
         running_jobs = []
