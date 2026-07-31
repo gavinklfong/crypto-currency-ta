@@ -33,7 +33,7 @@ variable "job_scripts_bucket_name" {
 variable "job_scripts" {
   description = "Map of job script folder names to their local directory paths"
   type        = map(string)
-  default     = {
+  default = {
     "ta_job" = "app/scripts/ta_job"
   }
 }
@@ -194,7 +194,7 @@ variable "lambdas" {
       function_name = "ec2-job-launcher"
       zip_path      = "../build/package/lambdas/ec2-job-launcher.zip"
       is_launcher   = true
-      environment   = {
+      environment = {
         JOB_SCRIPT_NAME = "ta_job"
         INSTANCE_TYPE   = "small"
       }
@@ -217,7 +217,7 @@ variable "lambdas" {
       function_name = "monitor-job-runner"
       zip_path      = "../build/package/lambdas/monitor-job-runner.zip"
       timeframes    = []
-      environment   = {
+      environment = {
         STALLED_THRESHOLD_MINUTES = "10"
       }
     }
@@ -225,10 +225,9 @@ variable "lambdas" {
     "ec2-reaper" = {
       function_name = "ec2-reaper"
       zip_path      = "../build/package/lambdas/ec2-reaper.zip"
-      environment   = {
-        JOB_TRACKER_TABLE_NAME    = var.job_tracker_table_name
-        MAX_INACTIVITY_MINUTES    = "30"
-        MAX_LIFETIME_HOURS        = "8"
+      environment = {
+        MAX_INACTIVITY_MINUTES = "30"
+        MAX_LIFETIME_HOURS     = "8"
       }
     }
   }

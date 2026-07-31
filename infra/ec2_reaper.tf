@@ -65,14 +65,14 @@ resource "aws_cloudwatch_event_rule" "ec2_reaper_schedule" {
 resource "aws_cloudwatch_event_target" "ec2_reaper_target" {
   rule      = aws_cloudwatch_event_rule.ec2_reaper_schedule.name
   target_id = "ec2_reaper_lambda"
-  arn       = aws_lambda_function.ec2_reaper.arn
+  arn       = aws_lambda_function.lambda["ec2-reaper"].arn
 }
 
 # Permission for EventBridge to invoke the Reaper
 resource "aws_lambda_permission" "allow_eventbridge_to_call_reaper" {
   statement_id  = "AllowExecutionFromEventBridge"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.ec2_reaper.function_name
+  function_name = aws_lambda_function.lambda["ec2-reaper"].function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.ec2_reaper_schedule.arn
 }
