@@ -82,6 +82,9 @@ def lambda_handler(event, context):
 
     region = boto3.session.Session().region_name
 
+    # Serialize job params as JSON
+    job_params_json = json.dumps({"symbol": symbol, "timeframe": timeframe})
+
     # Construct UserData script
     # The script will download the TA job directory from S3
     full_user_data = f"""#!/bin/bash
@@ -114,8 +117,11 @@ export AWS_REGION={region}
 # Force unbuffered Python output so logs appear in real-time
 export PYTHONUNBUFFERED=1
 
-# Execute the TA job main script
-python3 /tmp/{job_script_name}/main.py {symbol} {timeframe} {job_id}
+# Export job ID as environment variable
+export TA_JOB_ID={job_id}
+
+# Execute the TA job main script with job params as JSON
+python3 /tmp/{job_script_name}/main.py '{job_params_json}'
 
 # Make sure to sleep for a bit to allow logs to flush before shutdown
 sleep 60

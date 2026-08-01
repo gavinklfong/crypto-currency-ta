@@ -45,14 +45,14 @@ class TestLambdaHandler(unittest.TestCase):
         self.assertEqual(kwargs['LaunchTemplate']['LaunchTemplateId'], 'lt-12345678')
         self.assertEqual(kwargs['InstanceType'], 't3.medium')
 
-        # Check if symbol and timeframe are in UserData
+        # Check UserData contains expected env var and command with JSON params
         user_data_encoded = kwargs['UserData']
         user_data = base64.b64decode(user_data_encoded).decode('utf-8')
-        self.assertIn('XBTUSD', user_data)
-        self.assertIn('1h', user_data)
+        self.assertIn('export TA_JOB_ID=', user_data)
         self.assertIn('aws s3 cp s3://test-bucket/ta-job/ /tmp/ta-job/ --recursive', user_data)
         self.assertIn('pip3 install -r /tmp/ta-job/requirements.txt', user_data)
-        self.assertIn('python3 /tmp/ta-job/main.py', user_data)
+        self.assertIn("python3 /tmp/ta-job/main.py", user_data)
+        self.assertIn('{"symbol": "XBTUSD", "timeframe": "1h"}', user_data)
 
     @patch('lambda_function.JobStatusClient')
     @patch('lambda_function.ec2')
