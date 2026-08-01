@@ -38,7 +38,7 @@ resource "aws_iam_role_policy" "ec2_worker_policy" {
           "dynamodb:Scan"
         ]
         Effect   = "Allow"
-        Resource = [aws_dynamodb_table.market_data.arn]
+        Resource = [aws_dynamodb_table.market_data.arn, aws_dynamodb_table.job_tracker.arn]
       },
       {
         Action = [

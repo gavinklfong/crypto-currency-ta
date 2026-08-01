@@ -56,7 +56,8 @@ def main():
     except Exception as e:
         logger.error("Job failed: %s", str(e))
         try:
-            client.fail_job(args.job_id, str(e))
+            if client:
+                client.fail_job(args.job_id, str(e))
         except Exception as client_err:
             logger.error("Failed to report job failure: %s", str(client_err))
         sys.exit(1)

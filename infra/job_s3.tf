@@ -40,6 +40,7 @@ locals {
     for job_name, job_path in var.job_scripts : {
       for f in fileset("${path.module}/../${job_path}", "**") :
       "${job_name}/${f}" => "${path.module}/../${job_path}/${f}"
+      if !contains(split("/", f), "__pycache__") && !contains(split("/", f), ".pytest_cache") && !endswith(f, ".pyc")
     }
   ]...)
 }

@@ -7,7 +7,11 @@ JOB_TRACKER_TABLE_NAME = "crypto-currency-ta-job-tracker"
 
 class JobStatusClient:
     def __init__(self, table_name=None):
-        self.dynamodb = boto3.resource('dynamodb')
+        region = os.environ.get('AWS_DEFAULT_REGION') or os.environ.get('AWS_REGION')
+        session_kwargs = {}
+        if region:
+            session_kwargs['region_name'] = region
+        self.dynamodb = boto3.resource('dynamodb', **session_kwargs)
         self.table_name = table_name or JOB_TRACKER_TABLE_NAME
         if not self.table_name:
             raise ValueError("Table name must be provided or JOB_TRACKER_TABLE_NAME must be set")
@@ -66,7 +70,8 @@ class JobStatusClient:
         now = datetime.now(timezone.utc).isoformat()
         self.table.update_item(
             Key={'PK': f'JOB#{job_id}', 'SK': 'METADATA'},
-            UpdateExpression="SET status = :s, end_time = :now, progress = :p",
+            UpdateExpression="SET #st = :s, end_time = :now, progress = :p",
+            ExpressionAttributeNames={'#st': 'status'},
             ExpressionAttributeValues={
                 ':s': 'COMPLETED',
                 ':now': now,
@@ -79,7 +84,8 @@ class JobStatusClient:
         now = datetime.now(timezone.utc).isoformat()
         self.table.update_item(
             Key={'PK': f'JOB#{job_id}', 'SK': 'METADATA'},
-            UpdateExpression="SET status = :s, end_time = :now, progress = :p, failure_reason = :e",
+            UpdateExpression="SET #st = :s, end_time = :now, progress = :p, failure_reason = :e",
+            ExpressionAttributeNames={'#st': 'status'},
             ExpressionAttributeValues={
                 ':s': 'FAILED',
                 ':now': now,

@@ -80,6 +80,8 @@ def lambda_handler(event, context):
             'body': json.dumps({'error': f'Failed to initialize job tracker: {str(e)}'})
         }
 
+    region = boto3.session.Session().region_name
+
     # Construct UserData script
     # The script will download the TA job directory from S3
     full_user_data = f"""#!/bin/bash
@@ -88,12 +90,14 @@ yum update -y
 yum install -y python3-pip aws-cli
 
 # Download the TA job directory from S3
+echo "aws s3 cp s3://{scripts_bucket}/{job_script_name}/ /tmp/{job_script_name}/ --recursive"
 aws s3 cp s3://{scripts_bucket}/{job_script_name}/ /tmp/{job_script_name}/ --recursive
 
 # Install job-specific dependencies
 pip3 install -r /tmp/{job_script_name}/requirements.txt
 
 # Download the common utilities from S3
+echo "aws s3 cp s3://{scripts_bucket}/common/ /tmp/common/ --recursive"
 aws s3 cp s3://{scripts_bucket}/common/ /tmp/common/ --recursive
 
 # Install common dependencies
@@ -102,8 +106,16 @@ pip3 install -r /tmp/common/requirements.txt
 # Export PYTHONPATH so common can be found
 export PYTHONPATH=$PYTHONPATH:/tmp
 
+# Export AWS region for boto3
+echo "Setting AWS region to {region}"
+export AWS_DEFAULT_REGION={region}
+export AWS_REGION={region}
+
 # Execute the TA job main script
 python3 /tmp/{job_script_name}/main.py {symbol} {timeframe} {job_id}
+
+# Make sure to sleep for a bit to allow logs to flush before shutdown
+sleep 60
 
 # Shutdown the instance
 sudo shutdown -h now
