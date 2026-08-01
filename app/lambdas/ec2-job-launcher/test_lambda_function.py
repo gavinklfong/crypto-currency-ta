@@ -12,7 +12,7 @@ class TestLambdaHandler(unittest.TestCase):
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
         'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
-        'JOB_SCRIPT_NAME': 'ta_job',
+        'JOB_SCRIPT_NAME': 'ta-job',
         'INSTANCE_TYPE': 'medium'
     })
     def test_lambda_handler_success(self, mock_ec2, mock_job_status_class):
@@ -50,16 +50,16 @@ class TestLambdaHandler(unittest.TestCase):
         user_data = base64.b64decode(user_data_encoded).decode('utf-8')
         self.assertIn('XBTUSD', user_data)
         self.assertIn('1h', user_data)
-        self.assertIn('aws s3 cp s3://test-bucket/ta_job/ /tmp/ta_job/ --recursive', user_data)
-        self.assertIn('pip3 install -r /tmp/ta_job/requirements.txt', user_data)
-        self.assertIn('python3 /tmp/ta_job/main.py', user_data)
+        self.assertIn('aws s3 cp s3://test-bucket/ta-job/ /tmp/ta-job/ --recursive', user_data)
+        self.assertIn('pip3 install -r /tmp/ta-job/requirements.txt', user_data)
+        self.assertIn('python3 /tmp/ta-job/main.py', user_data)
 
     @patch('lambda_function.JobStatusClient')
     @patch('lambda_function.ec2')
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
         'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
-        'JOB_SCRIPT_NAME': 'ta_job',
+        'JOB_SCRIPT_NAME': 'ta-job',
         'INSTANCE_TYPE': 'small'
     })
     def test_lambda_handler_event_override(self, mock_ec2, mock_job_status_class):
@@ -88,7 +88,7 @@ class TestLambdaHandler(unittest.TestCase):
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
         'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
-        'JOB_SCRIPT_NAME': 'ta_job',
+        'JOB_SCRIPT_NAME': 'ta-job',
         'INSTANCE_TYPE': 'invalid'
     })
     def test_lambda_handler_invalid_env_type_fallback(self, mock_ec2, mock_job_status_class):
@@ -115,7 +115,7 @@ class TestLambdaHandler(unittest.TestCase):
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
         'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
-        'JOB_SCRIPT_NAME': 'ta_job'
+        'JOB_SCRIPT_NAME': 'ta-job'
     })
     def test_lambda_handler_missing_params(self, mock_job_status_class):
         # Arrange

@@ -61,7 +61,7 @@ class TestMonitorJobRunner(unittest.TestCase):
             'PK': 'JOB#job-123',
             'SK': 'METADATA',
             'status': 'RUNNING',
-            'job_type': 'ta_job',
+            'job_type': 'ta-job',
             'instance_id': 'i-abc123def',
             'last_heartbeat': (datetime.now(timezone.utc) - timedelta(minutes=20)).isoformat()
         }
@@ -86,7 +86,7 @@ class TestMonitorJobRunner(unittest.TestCase):
         args, kwargs = mock_sns.publish.call_args
         self.assertEqual(kwargs['TopicArn'], 'arn:aws:sns:us-east-1:123456789012:test-topic')
         self.assertIn('job-123', kwargs['Message'])
-        self.assertIn('ta_job', kwargs['Message'])
+        self.assertIn('ta-job', kwargs['Message'])
         self.assertIn('i-abc123def', kwargs['Message'])
 
     @patch.dict(os.environ, {}, clear=True)
@@ -116,7 +116,7 @@ class TestMonitorJobRunner(unittest.TestCase):
             'PK': 'JOB#job-123',
             'SK': 'METADATA',
             'status': 'RUNNING',
-            'job_type': 'ta_job',
+            'job_type': 'ta-job',
             'instance_id': 'i-abc123def',
             'last_heartbeat': (datetime.now(timezone.utc) - timedelta(minutes=20)).isoformat()
         }
