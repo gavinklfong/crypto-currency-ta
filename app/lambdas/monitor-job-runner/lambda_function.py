@@ -3,6 +3,7 @@ import os
 import logging
 from datetime import datetime, timedelta, timezone
 from common.job_status_client import JobStatusClient
+from common_utils import send_to_sns
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -20,7 +21,6 @@ def lambda_handler(event, context):
         return {'statusCode': 500, 'body': 'Missing SLACK_SNS_TOPIC_ARN'}
 
     client = JobStatusClient(job_tracker_table)
-    sns = boto3.client('sns')
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(job_tracker_table)
 
@@ -60,10 +60,7 @@ def lambda_handler(event, context):
 
             # 2. Send Slack notification via SNS
             message = f"⚠️ *Job Stalled Detected*\n\n*Job ID:* {job_id}\n*Type:* {job_type}\n*Instance:* {instance_id}\n*Last Heartbeat:* {item.get('last_heartbeat')}"
-            sns.publish(
-                TopicArn=slack_sns_topic_arn,
-                Message=message
-            )
+            send_to_sns(message, topic_arn=slack_sns_topic_arn)
             logger.info(f"Successfully marked job {job_id} as STALLED and notified Slack")
 
         except Exception as e:

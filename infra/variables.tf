@@ -119,6 +119,10 @@ variable "layers" {
       layer_name = "pyarrow"
       zip_path   = "../build/package/layers/pyarrow.zip"
     }
+    common-utils = {
+      layer_name = "common-utils"
+      zip_path   = "../build/package/layers/common-utils.zip"
+    }
   }
 }
 
@@ -203,6 +207,7 @@ variable "lambdas" {
     "ai-analysis" = {
       function_name = "ai-analysis"
       zip_path      = "../build/package/lambdas/ai-analysis.zip"
+      layers        = ["common-utils"]
       environment = {
         LLM_MODEL_ID = "google.gemma-3-4b-it"
       }
@@ -216,6 +221,7 @@ variable "lambdas" {
     "monitor-job-runner" = {
       function_name = "monitor-job-runner"
       zip_path      = "../build/package/lambdas/monitor-job-runner.zip"
+      layers        = ["common-utils"]
       timeframes    = []
       environment = {
         STALLED_THRESHOLD_MINUTES = "10"

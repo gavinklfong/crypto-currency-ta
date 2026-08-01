@@ -114,8 +114,11 @@ def build_single_lambda(lambda_dir: Path):
     print(f"Saved hash for {lambda_name}")
 
 def main():
-    # Do NOT clean everything — keep previous builds
+    # Clean stale build artifacts to avoid pip conflicts
+    if BUILD_DIR.exists():
+        shutil.rmtree(BUILD_DIR)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
+
     PACKAGE_DIR.mkdir(parents=True, exist_ok=True)
     HASH_DIR.mkdir(parents=True, exist_ok=True)
 

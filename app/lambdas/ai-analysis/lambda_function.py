@@ -4,12 +4,13 @@ import json
 import logging
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
+from common_utils import send_to_sns
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 dynamodb = boto3.resource("dynamodb")
 bedrock_runtime = boto3.client("bedrock-runtime")
-sns = boto3.client("sns")
 
 TABLE_NAME = "crypto-currency-ta-market-data"
 table = dynamodb.Table(TABLE_NAME)
@@ -170,13 +171,6 @@ def call_bedrock(prompt):
     except Exception as e:
         log_error("Bedrock invocation failed", error=str(e))
         raise Exception(f"Bedrock invocation failed: {str(e)}")
-
-def send_to_sns(text: str):
-    sns_topic_arn = os.environ["SNS_TOPIC_ARN"]
-    return sns.publish(
-        TopicArn=sns_topic_arn,
-        Message=text
-    )
 
 def lambda_handler(event, context):
     log_info("AI Analysis Lambda triggered", event=json.dumps(event))
