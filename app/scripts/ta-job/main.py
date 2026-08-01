@@ -1,8 +1,10 @@
 import sys
+import os
 import time
 import random
 import logging
 import argparse
+import json
 from common.job_status_client import JobStatusClient, HeartbeatThread
 
 logging.basicConfig(
@@ -31,6 +33,9 @@ def main():
     except (json.JSONDecodeError, KeyError) as e:
         logger.error("Invalid job params JSON: %s", str(e))
         sys.exit(1)
+
+    # Remove the JSON params from sys.argv so argparse doesn't try to parse them again
+    sys.argv = sys.argv[:1]
 
     parser = argparse.ArgumentParser(description="Simulated TA Job")
     parser.add_argument("--block", type=int, help="Seconds to simulate a heavy blocking task")
