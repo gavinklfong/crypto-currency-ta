@@ -75,12 +75,12 @@ def build_single_lambda(lambda_dir: Path):
         common_req = common_dir / "requirements.txt"
         if common_req.exists() and common_req.read_text().strip():
             print(f"Installing common dependencies for {lambda_name}")
-            run([sys.executable, "-m", "pip", "install", "-r", str(common_req), "-t", str(temp_dir)])
+            run([sys.executable, "-m", "pip", "install", "--ignore-installed", "--upgrade", "-r", str(common_req), "-t", str(temp_dir)])
 
     req = lambda_dir / "requirements.txt"
     if req.exists() and req.read_text().strip():
         print(f"Installing dependencies for {lambda_name}")
-        run([sys.executable, "-m", "pip", "install", "-r", str(req), "-t", str(temp_dir)])
+        run([sys.executable, "-m", "pip", "install", "--ignore-installed", "--upgrade", "-r", str(req), "-t", str(temp_dir)])
     else:
         print(f"No requirements.txt for {lambda_name}, skipping deps")
 

@@ -5,7 +5,12 @@ import logging
 import argparse
 from common.job_status_client import JobStatusClient, HeartbeatThread
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 logger = logging.getLogger(__name__)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Simulated TA Job")

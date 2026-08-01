@@ -111,6 +111,9 @@ echo "Setting AWS region to {region}"
 export AWS_DEFAULT_REGION={region}
 export AWS_REGION={region}
 
+# Force unbuffered Python output so logs appear in real-time
+export PYTHONUNBUFFERED=1
+
 # Execute the TA job main script
 python3 /tmp/{job_script_name}/main.py {symbol} {timeframe} {job_id}
 
