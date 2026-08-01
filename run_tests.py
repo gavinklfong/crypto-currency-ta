@@ -89,10 +89,11 @@ def main():
         # Run pytest
         print(f"\n🧪 Running pytest...")
 
-        # Set up environment with app in PYTHONPATH
+        # Set up environment with app + common_utils layer in PYTHONPATH
         test_env = os.environ.copy()
         app_dir = ROOT / "app"
-        test_env["PYTHONPATH"] = str(app_dir) + os.pathsep + test_env.get("PYTHONPATH", "")
+        common_utils_layer = app_dir / "layers" / "common-utils" / "python"
+        test_env["PYTHONPATH"] = str(app_dir) + os.pathsep + str(common_utils_layer) + os.pathsep + test_env.get("PYTHONPATH", "")
 
         if not run_command(["pytest", "-v"], cwd=lambda_dir, env=test_env):
             print(f"❌ Tests failed for {lambda_dir.name}")
