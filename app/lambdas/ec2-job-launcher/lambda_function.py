@@ -19,7 +19,6 @@ INSTANCE_TYPE_MAP = {
 def lambda_handler(event, context):
     launch_template_id = os.environ.get('LAUNCH_TEMPLATE_ID')
     scripts_bucket = os.environ.get('JOB_SCRIPTS_BUCKET_NAME')
-    job_script_name = os.environ.get('JOB_SCRIPT_NAME')
     default_instance_type_key = os.environ.get('INSTANCE_TYPE', 'small')
 
     logger.info("Received event: %s", json.dumps(event))
@@ -28,6 +27,7 @@ def lambda_handler(event, context):
     symbol = detail.get('symbol')
     timeframe = detail.get('timeframe')
     event_instance_type_key = detail.get('instance_type')
+    job_script_name = detail.get('job_script_name')
 
     if not symbol or not timeframe:
         logger.error("Error: Missing symbol or timeframe in event detail")
@@ -51,10 +51,10 @@ def lambda_handler(event, context):
         }
 
     if not job_script_name:
-        logger.error("Error: JOB_SCRIPT_NAME environment variable is not set.")
+        logger.error("Error: Missing job_script_name in event detail")
         return {
-            'statusCode': 500,
-            'body': json.dumps({'error': 'JOB_SCRIPT_NAME not set'})
+            'statusCode': 400,
+            'body': json.dumps({'error': 'Missing job_script_name in event detail'})
         }
 
     # Resolve instance type

@@ -200,8 +200,7 @@ variable "lambdas" {
       zip_path      = "../build/package/lambdas/ec2-job-launcher.zip"
       is_launcher   = true
       environment = {
-        JOB_SCRIPT_NAME = "ta-job"
-        INSTANCE_TYPE   = "small"
+        INSTANCE_TYPE = "small"
       }
     }
 

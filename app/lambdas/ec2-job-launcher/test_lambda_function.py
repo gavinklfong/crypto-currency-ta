@@ -12,7 +12,6 @@ class TestLambdaHandler(unittest.TestCase):
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
         'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
-        'JOB_SCRIPT_NAME': 'ta-job',
         'INSTANCE_TYPE': 'medium'
     })
     def test_lambda_handler_success(self, mock_ec2, mock_job_status_class):
@@ -20,7 +19,8 @@ class TestLambdaHandler(unittest.TestCase):
         event = {
             'detail': {
                 'symbol': 'XBTUSD',
-                'timeframe': '1h'
+                'timeframe': '1h',
+                'job_script_name': 'ta-job'
             }
         }
         context = MagicMock()
@@ -59,7 +59,6 @@ class TestLambdaHandler(unittest.TestCase):
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
         'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
-        'JOB_SCRIPT_NAME': 'ta-job',
         'INSTANCE_TYPE': 'small'
     })
     def test_lambda_handler_event_override(self, mock_ec2, mock_job_status_class):
@@ -68,7 +67,8 @@ class TestLambdaHandler(unittest.TestCase):
             'detail': {
                 'symbol': 'XBTUSD',
                 'timeframe': '1h',
-                'instance_type': 'large'
+                'instance_type': 'large',
+                'job_script_name': 'ta-job'
             }
         }
         context = MagicMock()
@@ -88,7 +88,6 @@ class TestLambdaHandler(unittest.TestCase):
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
         'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
-        'JOB_SCRIPT_NAME': 'ta-job',
         'INSTANCE_TYPE': 'invalid'
     })
     def test_lambda_handler_invalid_env_type_fallback(self, mock_ec2, mock_job_status_class):
@@ -96,7 +95,8 @@ class TestLambdaHandler(unittest.TestCase):
         event = {
             'detail': {
                 'symbol': 'XBTUSD',
-                'timeframe': '1h'
+                'timeframe': '1h',
+                'job_script_name': 'ta-job'
             }
         }
         context = MagicMock()
@@ -114,14 +114,14 @@ class TestLambdaHandler(unittest.TestCase):
     @patch('lambda_function.JobStatusClient')
     @patch.dict(os.environ, {
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
-        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
-        'JOB_SCRIPT_NAME': 'ta-job'
+        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket'
     })
     def test_lambda_handler_missing_params(self, mock_job_status_class):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD'
+                'symbol': 'XBTUSD',
+                'job_script_name': 'ta-job'
                 # Missing timeframe
             }
         }
@@ -136,13 +136,17 @@ class TestLambdaHandler(unittest.TestCase):
         self.assertIn('Missing symbol or timeframe', body['error'])
 
     @patch('lambda_function.JobStatusClient')
-    @patch.dict(os.environ, {}, clear=True)
-    def test_lambda_handler_missing_env_var(self, mock_job_status_class):
+    @patch.dict(os.environ, {
+        'LAUNCH_TEMPLATE_ID': 'lt-12345678',
+        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
+    })
+    def test_lambda_handler_missing_job_script_name(self, mock_job_status_class):
         # Arrange
         event = {
             'detail': {
                 'symbol': 'XBTUSD',
                 'timeframe': '1h'
+                # Missing job_script_name
             }
         }
         context = MagicMock()
@@ -151,13 +155,9 @@ class TestLambdaHandler(unittest.TestCase):
         response = lambda_handler(event, context)
 
         # Assert
-        self.assertEqual(response['statusCode'], 500)
+        self.assertEqual(response['statusCode'], 400)
         body = json.loads(response['body'])
-        self.assertTrue(
-            'LAUNCH_TEMPLATE_ID not set' in body['error'] or
-            'JOB_SCRIPTS_BUCKET_NAME not set' in body['error'] or
-            'JOB_SCRIPT_NAME not set' in body['error']
-        )
+        self.assertIn('Missing job_script_name in event detail', body['error'])
 
 if __name__ == '__main__':
     unittest.main()
