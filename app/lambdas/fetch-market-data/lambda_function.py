@@ -1,12 +1,19 @@
 import json
 import requests
+import requests.exceptions
 import boto3
 from datetime import datetime
 from itertools import islice
 import logging
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    retry_if_result,
+)
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 DEFAULT_SYMBOL = "XBTUSD"  # Bitcoin/USD
 CANDLE_INTERVAL = 1  # 1-minute candles (triggered every 1 minute)
@@ -14,6 +21,44 @@ KRAKEN_OHLC_URL = "https://api.kraken.com/0/public/OHLC"
 DYNAMODB_TABLE_NAME = "crypto-currency-ta-market-data"
 
 dynamodb_client = boto3.client("dynamodb", region_name="us-east-2")
+
+
+def _is_http_429(response):
+    """Return True if the response is an HTTP 429 (rate limited)."""
+    return getattr(response, "status_code", None) == 429
+
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    retry=(
+        retry_if_exception_type((
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+            requests.exceptions.RetryError,
+        ))
+        | retry_if_exception_type(requests.exceptions.HTTPError)
+        | retry_if_result(_is_http_429)
+    ),
+    before_sleep=lambda retry_state: logger.warning(
+        "Kraken API request failed (attempt %d/5): %s — retrying in %.1fs",
+        retry_state.attempt_number,
+        retry_state.outcome.exception() if retry_state.outcome.failed else retry_state.outcome.result().status_code,
+        retry_state.next_action.sleep,
+    ),
+    reraise=True,
+)
+def _fetch_ohlc_from_kraken(pair, interval):
+    """Fetch OHLC data from Kraken API with automatic retry and backoff."""
+    logger.info("Fetching OHLC for pair=%s interval=%s", pair, interval)
+    response = requests.get(
+        KRAKEN_OHLC_URL,
+        params={"pair": pair, "interval": interval},
+        timeout=10,
+    )
+    # Raise HTTPError for non-429 errors so tenacity can retry them
+    response.raise_for_status()
+    return response
 
 
 def log_info(message, **kwargs):
@@ -99,8 +144,8 @@ def lambda_handler(event, context):
     }
 
     try:
-        response = requests.get(KRAKEN_OHLC_URL, params=params, timeout=10)
-        data = response.json()
+        kraken_response = _fetch_ohlc_from_kraken(params["pair"], params["interval"])
+        data = kraken_response.json()
 
         if data.get("error"):
             return {

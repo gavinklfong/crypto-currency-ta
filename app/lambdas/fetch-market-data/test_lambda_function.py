@@ -1,15 +1,92 @@
 import json
 import pytest
-from unittest.mock import patch, MagicMock
-from lambda_function import lambda_handler
+from unittest.mock import patch, MagicMock, PropertyMock
+from lambda_function import lambda_handler, _fetch_ohlc_from_kraken
+import requests
+
+
+class TestFetchOHLCFromKraken:
+    """Test suite for _fetch_ohlc_from_kraken with retry decorator"""
+
+    def test_fetch_returns_json_on_success(self):
+        """Test that _fetch_ohlc_from_kraken returns response.json() on success"""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"result": {"XBTUSD": []}, "error": []}
+        mock_response.status_code = 200
+
+        with patch("requests.get", return_value=mock_response) as mock_get:
+            result = _fetch_ohlc_from_kraken("XBTUSD", 1)
+            assert result == mock_response
+            mock_get.assert_called_once()
+            call_args = mock_get.call_args
+            assert call_args[0][0] == "https://api.kraken.com/0/public/OHLC"
+            assert call_args[1]["params"]["pair"] == "XBTUSD"
+            assert call_args[1]["params"]["interval"] == 1
+            assert call_args[1]["timeout"] == 10
+
+    def test_fetch_retries_on_connection_error(self):
+        """Test that _fetch_ohlc_from_kraken retries on ConnectionError"""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"result": {"XBTUSD": []}, "error": []}
+        mock_response.status_code = 200
+
+        with patch("requests.get", side_effect=[
+            requests.exceptions.ConnectionError("Connection refused"),
+            requests.exceptions.ConnectionError("Connection refused"),
+            mock_response,
+        ]) as mock_get:
+            result = _fetch_ohlc_from_kraken("XBTUSD", 1)
+            assert result == mock_response
+            assert mock_get.call_count == 3
+
+    def test_fetch_retries_on_timeout(self):
+        """Test that _fetch_ohlc_from_kraken retries on Timeout"""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"result": {"XBTUSD": []}, "error": []}
+        mock_response.status_code = 200
+
+        with patch("requests.get", side_effect=[
+            requests.exceptions.Timeout("Request timed out"),
+            mock_response,
+        ]) as mock_get:
+            result = _fetch_ohlc_from_kraken("XBTUSD", 1)
+            assert result == mock_response
+            assert mock_get.call_count == 2
+
+    def test_fetch_retries_on_http_429(self):
+        """Test that _fetch_ohlc_from_kraken retries on HTTP 429 (rate limit)"""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"result": {"XBTUSD": []}, "error": []}
+        mock_response.status_code = 200
+
+        rate_limited = MagicMock()
+        rate_limited.status_code = 429
+        rate_limited.raise_for_status.side_effect = requests.exceptions.HTTPError(response=rate_limited)
+
+        with patch("requests.get", side_effect=[
+            rate_limited,
+            rate_limited,
+            mock_response,
+        ]) as mock_get:
+            result = _fetch_ohlc_from_kraken("XBTUSD", 1)
+            assert result == mock_response
+            assert mock_get.call_count == 3
+
+    def test_fetch_exhausts_retries_on_persistent_error(self):
+        """Test that _fetch_ohlc_from_kraken raises after max retries"""
+        with patch("requests.get", side_effect=requests.exceptions.ConnectionError("Persistent failure")) as mock_get:
+            with pytest.raises(requests.exceptions.ConnectionError):
+                _fetch_ohlc_from_kraken("XBTUSD", 1)
+            # Verify all 5 retry attempts were made
+            assert mock_get.call_count == 5
 
 
 class TestLambdaHandler:
     """Test suite for lambda_handler function"""
 
     @patch("lambda_function.dynamodb_client")
-    @patch("lambda_function.requests.get")
-    def test_lambda_handler_success(self, mock_get, mock_dynamodb):
+    @patch("lambda_function._fetch_ohlc_from_kraken")
+    def test_lambda_handler_success(self, mock_fetch, mock_dynamodb):
         """Test lambda handler with successful Kraken API response and DynamoDB write"""
         mock_dynamodb.put_item.return_value = {}
 
@@ -23,7 +100,7 @@ class TestLambdaHandler:
             },
             "error": [],
         }
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = mock_response
 
         response = lambda_handler({}, {})
 
@@ -35,11 +112,7 @@ class TestLambdaHandler:
         assert "ohlc" in body
 
         # Verify Kraken API was called with correct parameters
-        mock_get.assert_called_once()
-        call_args = mock_get.call_args
-        assert call_args[0][0] == "https://api.kraken.com/0/public/OHLC"
-        assert call_args[1]["params"]["pair"] == "XBTUSD"
-        assert call_args[1]["params"]["interval"] == 1
+        mock_fetch.assert_called_once_with("XBTUSD", 1)
 
         # Verify DynamoDB put_item was called twice (for each of the last 10 or fewer candles)
         # Since we have 2 candles, put_item should be called 2 times
@@ -47,8 +120,8 @@ class TestLambdaHandler:
 
 
     @patch("lambda_function.dynamodb_client")
-    @patch("lambda_function.requests.get")
-    def test_lambda_handler_dynamodb_put_item_called(self, mock_get, mock_dynamodb):
+    @patch("lambda_function._fetch_ohlc_from_kraken")
+    def test_lambda_handler_dynamodb_put_item_called(self, mock_fetch, mock_dynamodb):
         """Test that put_item is called with correct table name"""
         mock_dynamodb.put_item.return_value = {}        
 
@@ -61,7 +134,7 @@ class TestLambdaHandler:
             },
             "error": [],
         }
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = mock_response
 
         lambda_handler({}, {})
 
@@ -71,8 +144,8 @@ class TestLambdaHandler:
         assert call_kwargs["TableName"] == "crypto-currency-ta-market-data"
 
     @patch("lambda_function.dynamodb_client")
-    @patch("lambda_function.requests.get")
-    def test_lambda_handler_dynamodb_item_structure(self, mock_get, mock_dynamodb):
+    @patch("lambda_function._fetch_ohlc_from_kraken")
+    def test_lambda_handler_dynamodb_item_structure(self, mock_fetch, mock_dynamodb):
         """Test that DynamoDB items have correct structure with correct keys"""
         mock_dynamodb.put_item.return_value = {}
 
@@ -85,7 +158,7 @@ class TestLambdaHandler:
             },
             "error": [],
         }
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = mock_response
 
         lambda_handler({}, {})
 
@@ -111,14 +184,14 @@ class TestLambdaHandler:
         assert "created_at" in item
 
     @patch("lambda_function.dynamodb_client")
-    @patch("lambda_function.requests.get")
-    def test_lambda_handler_kraken_error(self, mock_get, mock_dynamodb):
+    @patch("lambda_function._fetch_ohlc_from_kraken")
+    def test_lambda_handler_kraken_error(self, mock_fetch, mock_dynamodb):
         """Test lambda handler when Kraken API returns an error"""
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "error": ["EAPI:Invalid key"],
         }
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = mock_response
 
         response = lambda_handler({}, {})
 
@@ -129,22 +202,22 @@ class TestLambdaHandler:
         mock_dynamodb.put_item.assert_not_called()
 
     @patch("lambda_function.dynamodb_client")
-    @patch("lambda_function.requests.get")
-    def test_lambda_handler_request_timeout(self, mock_get, mock_dynamodb):
-        """Test lambda handler when request times out"""
-        mock_get.side_effect = Exception("Request timeout")
+    def test_lambda_handler_request_timeout(self, mock_dynamodb):
+        """Test lambda handler when request times out (after retries exhausted)"""
+        mock_dynamodb.put_item.return_value = {}
 
-        response = lambda_handler({}, {})
+        with patch("lambda_function._fetch_ohlc_from_kraken", side_effect=requests.exceptions.ConnectionError("Request timeout")):
+            response = lambda_handler({}, {})
 
-        assert response["statusCode"] == 500
-        body = json.loads(response["body"])
-        assert "error" in body
-        # Verify DynamoDB was NOT called on request error
-        mock_dynamodb.put_item.assert_not_called()
+            assert response["statusCode"] == 500
+            body = json.loads(response["body"])
+            assert "error" in body
+            # Verify DynamoDB was NOT called on request error
+            mock_dynamodb.put_item.assert_not_called()
 
     @patch("lambda_function.dynamodb_client")
-    @patch("lambda_function.requests.get")
-    def test_lambda_handler_dynamodb_write_failure(self, mock_get, mock_dynamodb):
+    @patch("lambda_function._fetch_ohlc_from_kraken")
+    def test_lambda_handler_dynamodb_write_failure(self, mock_fetch, mock_dynamodb):
         """Test lambda handler when DynamoDB write fails"""
         mock_dynamodb.put_item.side_effect = Exception("DynamoDB connection error")
 
@@ -157,7 +230,7 @@ class TestLambdaHandler:
             },
             "error": [],
         }
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = mock_response
 
         response = lambda_handler({}, {})
 
@@ -166,8 +239,8 @@ class TestLambdaHandler:
         assert "error" in body
 
     @patch("lambda_function.dynamodb_client")
-    @patch("lambda_function.requests.get")
-    def test_lambda_handler_multiple_ohlc_records(self, mock_get, mock_dynamodb):
+    @patch("lambda_function._fetch_ohlc_from_kraken")
+    def test_lambda_handler_multiple_ohlc_records(self, mock_fetch, mock_dynamodb):
         """Test lambda handler writes multiple OHLC candles to DynamoDB"""
         mock_dynamodb.put_item.return_value = {}
 
@@ -182,7 +255,7 @@ class TestLambdaHandler:
             },
             "error": [],
         }
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = mock_response
 
         response = lambda_handler({}, {})
 
@@ -196,8 +269,8 @@ class TestLambdaHandler:
         assert mock_dynamodb.put_item.call_count == 3
 
     @patch("lambda_function.dynamodb_client")
-    @patch("lambda_function.requests.get")
-    def test_lambda_handler_response_includes_ohlc_data(self, mock_get, mock_dynamodb):
+    @patch("lambda_function._fetch_ohlc_from_kraken")
+    def test_lambda_handler_response_includes_ohlc_data(self, mock_fetch, mock_dynamodb):
         """Test that lambda handler response includes original OHLC data"""
         mock_dynamodb.put_item.return_value = {}
 
@@ -212,7 +285,7 @@ class TestLambdaHandler:
             },
             "error": [],
         }
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = mock_response
 
         response = lambda_handler({}, {})
 
@@ -221,8 +294,8 @@ class TestLambdaHandler:
 
 
     @patch("lambda_function.dynamodb_client")
-    @patch("lambda_function.requests.get")
-    def test_lambda_handler_writes_in_sequence(self, mock_get, mock_dynamodb):
+    @patch("lambda_function._fetch_ohlc_from_kraken")
+    def test_lambda_handler_writes_in_sequence(self, mock_fetch, mock_dynamodb):
         """Verify that DynamoDB put_item is called for each candle"""
 
         # Mock put_item to succeed
@@ -240,7 +313,7 @@ class TestLambdaHandler:
             },
             "error": [],
         }
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = mock_response
 
         response = lambda_handler({}, {})
 
