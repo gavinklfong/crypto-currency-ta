@@ -44,11 +44,13 @@ resource "aws_iam_role_policy" "ec2_reaper_policy" {
         Effect = "Allow"
         Action = [
           "dynamodb:Scan",
+          "dynamodb:Query",
           "dynamodb:UpdateItem"
         ]
         Resource = [
           aws_dynamodb_table.job_tracker.arn,
-          "${aws_dynamodb_table.job_tracker.arn}/*"
+          "${aws_dynamodb_table.job_tracker.arn}/*",
+          "${aws_dynamodb_table.job_tracker.arn}/index/*"
         ]
       }
     ]
