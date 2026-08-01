@@ -3,7 +3,10 @@ import json
 import base64
 import os
 import uuid
+import logging
 from common.job_status_client import JobStatusClient
+
+logger = logging.getLogger(__name__)
 
 ec2 = boto3.client('ec2')
 
@@ -19,7 +22,7 @@ def lambda_handler(event, context):
     job_script_name = os.environ.get('JOB_SCRIPT_NAME')
     default_instance_type_key = os.environ.get('INSTANCE_TYPE', 'small')
 
-    print(f"Received event: {json.dumps(event)}")
+    logger.info("Received event: %s", json.dumps(event))
 
     detail = event.get('detail', {})
     symbol = detail.get('symbol')
@@ -27,28 +30,28 @@ def lambda_handler(event, context):
     event_instance_type_key = detail.get('instance_type')
 
     if not symbol or not timeframe:
-        print("Error: Missing symbol or timeframe in event detail")
+        logger.error("Error: Missing symbol or timeframe in event detail")
         return {
             'statusCode': 400,
             'body': json.dumps({'error': 'Missing symbol or timeframe in event detail'})
         }
 
     if not launch_template_id:
-        print("Error: LAUNCH_TEMPLATE_ID environment variable is not set.")
+        logger.error("Error: LAUNCH_TEMPLATE_ID environment variable is not set.")
         return {
             'statusCode': 500,
             'body': json.dumps({'error': 'LAUNCH_TEMPLATE_ID not set'})
         }
 
     if not scripts_bucket:
-        print("Error: JOB_SCRIPTS_BUCKET_NAME environment variable is not set.")
+        logger.error("Error: JOB_SCRIPTS_BUCKET_NAME environment variable is not set.")
         return {
             'statusCode': 500,
             'body': json.dumps({'error': 'JOB_SCRIPTS_BUCKET_NAME not set'})
         }
 
     if not job_script_name:
-        print("Error: JOB_SCRIPT_NAME environment variable is not set.")
+        logger.error("Error: JOB_SCRIPT_NAME environment variable is not set.")
         return {
             'statusCode': 500,
             'body': json.dumps({'error': 'JOB_SCRIPT_NAME not set'})
@@ -57,7 +60,7 @@ def lambda_handler(event, context):
     # Resolve instance type
     instance_type_key = event_instance_type_key or default_instance_type_key
     aws_instance_type = INSTANCE_TYPE_MAP.get(instance_type_key, INSTANCE_TYPE_MAP['small'])
-    print(f"Selected instance type: {aws_instance_type} (from key: {instance_type_key})")
+    logger.info("Selected instance type: %s (from key: %s)", aws_instance_type, instance_type_key)
 
     # Generate a unique job ID
     job_id = str(uuid.uuid4())
@@ -71,7 +74,7 @@ def lambda_handler(event, context):
             instance_id="PENDING"  # Will be updated by the EC2 instance if possible, or just leave as PENDING for now
         )
     except Exception as e:
-        print(f"Error initializing job tracker: {str(e)}")
+        logger.error("Error initializing job tracker: %s", str(e))
         return {
             'statusCode': 500,
             'body': json.dumps({'error': f'Failed to initialize job tracker: {str(e)}'})
@@ -106,7 +109,7 @@ python3 /tmp/{job_script_name}/main.py {symbol} {timeframe} {job_id}
 sudo shutdown -h now
 """
 
-    print(f"Launching EC2 instance with Launch Template: {launch_template_id} and Instance Type: {aws_instance_type}")
+    logger.info("Launching EC2 instance with Launch Template: %s and Instance Type: %s", launch_template_id, aws_instance_type)
 
     try:
         response = ec2.run_instances(
@@ -127,7 +130,7 @@ sudo shutdown -h now
         )
 
         instance_id = response['Instances'][0]['InstanceId']
-        print(f"Successfully launched instance: {instance_id}")
+        logger.info("Successfully launched instance: %s", instance_id)
 
         # Update job tracker with the actual instance_id
         try:
@@ -137,7 +140,7 @@ sudo shutdown -h now
                 ExpressionAttributeValues={':i': instance_id}
             )
         except Exception as e:
-            print(f"Warning: Failed to update instance_id in job tracker: {str(e)}")
+            logger.warning("Failed to update instance_id in job tracker: %s", str(e))
 
         return {
             'statusCode': 200,
@@ -148,7 +151,7 @@ sudo shutdown -h now
             })
         }
     except Exception as e:
-        print(f"Error launching EC2 instance: {str(e)}")
+        logger.error("Error launching EC2 instance: %s", str(e))
         # Mark job as failed if launch failed
         try:
             job_status.fail_job(job_id, f"EC2 Launch failed: {str(e)}")

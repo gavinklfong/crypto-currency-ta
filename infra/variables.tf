@@ -25,7 +25,7 @@ variable "export_bucket_name" {
 }
 
 variable "job_scripts_bucket_name" {
-  description = "Name of the S3 bucket for TA job scripts"
+  description = "Name of the S3 bucket for job scripts"
   type        = string
   default     = "crypto-currency-ta-scripts"
 }

@@ -1,8 +1,11 @@
 import boto3
 import os
 import json
+import logging
 from datetime import datetime, timezone, timedelta
 from common.job_status_client import JobStatusClient
+
+logger = logging.getLogger(__name__)
 
 ec2 = boto3.client('ec2')
 
@@ -12,17 +15,17 @@ def lambda_handler(event, context):
     max_inactivity_minutes = int(os.environ.get('MAX_INACTIVITY_MINUTES', 30))
     max_lifetime_hours = int(os.environ.get('MAX_LIFETIME_HOURS', 8))
 
-    print(f"Starting Reaper scan. Thresholds: Inactivity={max_inactivity_minutes}m, MaxLifetime={max_lifetime_hours}h")
+    logger.info("Starting Reaper scan. Thresholds: Inactivity=%dm, MaxLifetime=%dh", max_inactivity_minutes, max_lifetime_hours)
 
     try:
         job_status = JobStatusClient()
         running_jobs = job_status.get_running_jobs()
     except Exception as e:
-        print(f"Error fetching running jobs: {str(e)}")
+        logger.error("Error fetching running jobs: %s", str(e))
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
     if not running_jobs:
-        print("No running jobs found.")
+        logger.info("No running jobs found.")
         return {'statusCode': 200, 'body': json.dumps({'message': 'No running jobs to check'})}
 
     now = datetime.now(timezone.utc)
@@ -35,7 +38,7 @@ def lambda_handler(event, context):
         last_heartbeat_str = job.get('last_heartbeat')
 
         if not start_time_str or not last_heartbeat_str:
-            print(f"Job {job_id} has missing timestamps. Skipping.")
+            logger.warning("Job %s has missing timestamps. Skipping.", job_id)
             continue
 
         # Parse ISO timestamps
@@ -54,22 +57,22 @@ def lambda_handler(event, context):
             reason = f"Max lifetime exceeded (started: {start_time_str})"
 
         if reason:
-            print(f"Job {job_id} flagged for termination: {reason}")
+            logger.info("Job %s flagged for termination: %s", job_id, reason)
 
             if instance_id and instance_id != "PENDING":
                 try:
-                    print(f"Terminating instance {instance_id} for job {job_id}...")
+                    logger.info("Terminating instance %s for job %s...", instance_id, job_id)
                     ec2.terminate_instances(InstanceIds=[instance_id])
 
                     # Mark job as failed in DynamoDB
                     job_status.fail_job(job_id, f"TERMINATED_BY_REAPER: {reason}")
 
-                    print(f"Successfully terminated instance {instance_id} and updated job {job_id}.")
+                    logger.info("Successfully terminated instance %s and updated job %s.", instance_id, job_id)
                     terminated_count += 1
                 except Exception as e:
-                    print(f"Error terminating instance {instance_id} for job {job_id}: {str(e)}")
+                    logger.error("Error terminating instance %s for job %s: %s", instance_id, job_id, str(e))
             else:
-                print(f"Job {job_id} flagged but no valid instance_id found (or PENDING). Skipping termination.")
+                logger.warning("Job %s flagged but no valid instance_id found (or PENDING). Skipping termination.", job_id)
 
     return {
         'statusCode': 200,
