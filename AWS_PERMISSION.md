@@ -1,158 +1,175 @@
-# AWS Required Permissions
+# AWS IAM Permissions for Terraform Apply
 
-The following permissions are required for Terraform to successfully apply the infrastructure changes.
-
-## Amazon API Gateway
+## API Gateway
+- `apigateway:DELETE`
 - `apigateway:GET`
+- `apigateway:PATCH`
 - `apigateway:POST`
 - `apigateway:PUT`
-- `apigateway:DELETE`
-- `apigateway:PATCH`
 
-## Amazon Bedrock
+## Bedrock
+- `bedrock:GetFoundationModel`
+- `bedrock:GetFoundationModelAvailability`
 - `bedrock:InvokeModel`
 - `bedrock:InvokeModelWithResponseStream`
 - `bedrock:ListFoundationModels`
 
-## Amazon DynamoDB
+## CloudWatch Logs
+- `logs:CreateLogGroup`
+- `logs:CreateLogStream`
+- `logs:DeleteLogGroup`
+- `logs:DescribeLogGroups`
+- `logs:DescribeLogStreams`
+- `logs:PutLogEvents`
+
+## DynamoDB
 - `dynamodb:CreateTable`
 - `dynamodb:DeleteTable`
-- `dynamodb:UpdateTable`
-- `dynamodb:DescribeTable`
 - `dynamodb:DescribeContinuousBackups`
 - `dynamodb:DescribeLimits`
 - `dynamodb:DescribeStream`
+- `dynamodb:DescribeTable`
 - `dynamodb:DescribeTimeToLive`
 - `dynamodb:ListTables`
 - `dynamodb:ListTagsOfResource`
 - `dynamodb:TagResource`
 - `dynamodb:UntagResource`
 - `dynamodb:UpdateContinuousBackups`
+- `dynamodb:UpdateTable`
 
-## Amazon EventBridge
-- `events:PutRule`
+## EC2
+- `ec2:DescribeImages`
+- `ec2:DescribeInstances`
+- `ec2:DescribeInstanceSqlHaHistoryStates`
+- `ec2:DescribeInstanceSqlHaStates`
+- `ec2:DescribeInstanceStatus`
+- `ec2:DescribeInstanceTypes`
+- `ec2:DescribeLaunchTemplates`
+- `ec2:DescribeSecurityGroups`
+- `ec2:DescribeSubnets`
+- `ec2:DescribeVpcs`
+
+## EventBridge
 - `events:DeleteRule`
 - `events:DescribeRule`
-- `events:PutTargets`
-- `events:RemoveTargets`
 - `events:ListTargetsByRule`
 - `events:ListTagsForResource`
+- `events:PutRule`
+- `events:PutTargets`
+- `events:RemoveTargets`
 
-## AWS IAM
-- `iam:CreateRole`
-- `iam:DeleteRole`
-- `iam:GetRole`
-- `iam:UpdateAssumeRolePolicy`
-- `iam:PassRole`
-- `iam:CreatePolicy`
-- `iam:DeletePolicy`
-- `iam:GetPolicy`
-- `iam:CreatePolicyVersion`
-- `iam:DeletePolicyVersion`
-- `iam:GetPolicyVersion`
+## IAM
 - `iam:AttachRolePolicy`
-- `iam:DetachRolePolicy`
-- `iam:PutRolePolicy`
-- `iam:GetRolePolicy`
+- `iam:CreateInstanceProfile`
+- `iam:CreatePolicy`
+- `iam:CreatePolicyVersion`
+- `iam:CreateRole`
+- `iam:DeleteInstanceProfile`
+- `iam:DeletePolicy`
+- `iam:DeletePolicyVersion`
+- `iam:DeleteRole`
 - `iam:DeleteRolePolicy`
+- `iam:DetachRolePolicy`
+- `iam:GetInstanceProfile`
+- `iam:GetPolicy`
+- `iam:GetPolicyVersion`
+- `iam:GetRole`
+- `iam:GetRolePolicy`
 - `iam:ListAttachedRolePolicies`
-- `iam:ListRolePolicies`
 - `iam:ListPolicyVersions`
+- `iam:ListRolePolicies`
+- `iam:PassRole`
+- `iam:PutRolePolicy`
+- `iam:TagRole`
+- `iam:UntagRole`
+- `iam:UpdateAssumeRolePolicy`
 
-## AWS Lambda
+## Lambda
+- `lambda:AddPermission`
+- `lambda:CreateAlias`
 - `lambda:CreateFunction`
+- `lambda:DeleteAlias`
 - `lambda:DeleteFunction`
+- `lambda:DeleteLayerVersion`
+- `lambda:GetAlias`
 - `lambda:GetFunction`
-- `lambda:GetFunctionConfiguration`
 - `lambda:GetFunctionCodeSigningConfig`
+- `lambda:GetFunctionConfiguration`
+- `lambda:GetLayerVersion`
+- `lambda:GetLayerVersionPolicy`
+- `lambda:GetPolicy`
+- `lambda:ListAliases`
+- `lambda:ListFunctions`
+- `lambda:ListLayerVersions`
+- `lambda:ListLayers`
+- `lambda:ListTags`
+- `lambda:ListVersionsByFunction`
+- `lambda:PassCapacityProvider`
+- `lambda:PublishLayerVersion`
+- `lambda:PublishVersion`
+- `lambda:RemovePermission`
+- `lambda:UpdateAlias`
 - `lambda:UpdateFunctionCode`
 - `lambda:UpdateFunctionConfiguration`
-- `lambda:ListFunctions`
-- `lambda:AddPermission`
-- `lambda:RemovePermission`
-- `lambda:PublishVersion`
-- `lambda:ListVersionsByFunction`
-- `lambda:CreateAlias`
-- `lambda:UpdateAlias`
-- `lambda:DeleteAlias`
-- `lambda:GetAlias`
-- `lambda:ListAliases`
-- `lambda:PublishLayerVersion`
-- `lambda:GetLayerVersion`
-- `lambda:DeleteLayerVersion`
-- `lambda:ListLayerVersions`
-- `lambda:GetLayerVersionPolicy`
-- `lambda:ListLayers`
-- `lambda:GetEventSourceMapping`
-- `lambda:PassCapacityProvider`
-- `lambda:ListTags`
 
-## Amazon S3
+## S3
+- `s3:AbortMultipartUpload`
 - `s3:CreateBucket`
 - `s3:DeleteBucket`
-- `s3:GetBucketLocation`
-- `s3:GetBucketAcl`
-- `s3:PutBucketAcl`
-- `s3:GetBucketWebsite`
-- `s3:GetBucketNotification`
-- `s3:GetBucketVersioning`
-- `s3:PutBucketVersioning`
-- `s3:GetBucketTagging`
-- `s3:PutBucketTagging`
-- `s3:GetBucketCors`
-- `s3:PutBucketCors`
-- `s3:GetBucketObjectLockConfiguration`
-- `s3:PutBucketObjectLockConfiguration`
-- `s3:GetLifecycleConfiguration`
-- `s3:PutLifecycleConfiguration`
-- `s3:GetEncryptionConfiguration`
-- `s3:PutEncryptionConfiguration`
-- `s3:GetReplicationConfiguration`
-- `s3:PutReplicationConfiguration`
-- `s3:GetBucketPublicAccessBlock`
-- `s3:PutBucketPublicAccessBlock`
-- `s3:GetBucketOwnershipControls`
-- `s3:GetBucketLogging`
-- `s3:PutAccelerateConfiguration`
-- `s3:GetAccelerateConfiguration`
-- `s3:GetBucketRequestPayment`
-- `s3:PutObject`
-- `s3:GetObject`
 - `s3:DeleteObject`
-- `s3:AbortMultipartUpload`
+- `s3:GetAccelerateConfiguration`
+- `s3:GetBucketAcl`
+- `s3:GetBucketCors`
+- `s3:GetBucketLocation`
+- `s3:GetBucketLogging`
+- `s3:GetBucketNotification`
+- `s3:GetBucketObjectLockConfiguration`
+- `s3:GetBucketOwnershipControls`
+- `s3:GetBucketPolicy`
+- `s3:GetBucketPublicAccessBlock`
+- `s3:GetBucketRequestPayment`
+- `s3:GetBucketTagging`
+- `s3:GetBucketVersioning`
+- `s3:GetBucketWebsite`
+- `s3:GetEncryptionConfiguration`
+- `s3:GetLifecycleConfiguration`
+- `s3:GetObject`
+- `s3:GetObjectTagging`
+- `s3:GetReplicationConfiguration`
 - `s3:ListBucket`
 - `s3:ListBucketMultipartUploads`
-- `s3:GetBucketPolicy`
-- `s3:PutBucketPolicy`
+- `s3:PutAccelerateConfiguration`
+- `s3:PutBucketAcl`
+- `s3:PutBucketCors`
+- `s3:PutBucketObjectLockConfiguration`
+- `s3:PutBucketPublicAccessBlock`
+- `s3:PutBucketTagging`
+- `s3:PutBucketVersioning`
+- `s3:PutEncryptionConfiguration`
+- `s3:PutLifecycleConfiguration`
+- `s3:PutObject`
+- `s3:PutReplicationConfiguration`
 
-## Amazon SNS
+## SNS
+- `sns:ConfirmSubscription`
 - `sns:CreateTopic`
 - `sns:DeleteTopic`
+- `sns:GetSubscriptionAttributes`
 - `sns:GetTopicAttributes`
-- `sns:SetTopicAttributes`
-- `sns:ListTopics`
-- `sns:Subscribe`
-- `sns:Unsubscribe`
-- `sns:ConfirmSubscription`
 - `sns:ListSubscriptions`
 - `sns:ListSubscriptionsByTopic`
-- `sns:GetSubscriptionAttributes`
-- `sns:SetSubscriptionAttributes`
 - `sns:ListTagsForResource`
+- `sns:ListTopics`
+- `sns:SetSubscriptionAttributes`
+- `sns:SetTopicAttributes`
+- `sns:Subscribe`
+- `sns:Unsubscribe`
 
-## Amazon SQS
+## SQS
 - `sqs:CreateQueue`
 - `sqs:DeleteQueue`
 - `sqs:GetQueueAttributes`
-- `sqs:SetQueueAttributes`
-- `sqs:ListQueues`
-- `sqs:ListQueueTags`
 - `sqs:ListDeadLetterSourceQueues`
-
-## Amazon CloudWatch Logs
-- `logs:CreateLogGroup`
-- `logs:DeleteLogGroup`
-- `logs:DescribeLogGroups`
-- `logs:DescribeLogStreams`
-- `logs:CreateLogStream`
-- `logs:PutLogEvents`
+- `sqs:ListQueueTags`
+- `sqs:ListQueues`
+- `sqs:SetQueueAttributes`
