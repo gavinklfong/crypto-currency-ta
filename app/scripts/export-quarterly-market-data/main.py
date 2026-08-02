@@ -2,13 +2,17 @@
 """
 CLI script to export quarterly market data from DynamoDB to S3 as Parquet files.
 
+All timeframes are combined into a single Parquet file per symbol per quarter.
+
 Usage:
-    PYTHONPATH=../../layers/common-utils python main.py '{"timeframe":"1m","symbol":"XBTUSD","time_period":"2026_Q1"}'
+    PYTHONPATH=../../layers/common-utils python main.py '{"symbol":"XBTUSD","time_period":"2026_Q1"}'
+
+S3 key format: <symbol>/<yyyy-QQ>/data.parquet (e.g., XBTUSD/2026-Q1/data.parquet)
 """
 import sys
 import json
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Tuple
 
 import boto3
@@ -204,31 +208,21 @@ def dataframe_to_parquet_buffer(df: pd.DataFrame) -> io.BytesIO:
 
 
 # ------------------------------------------------------------
-# Build S3 key based on timeframe
+# Build S3 key: <symbol>/<yyyy-QQ>/data.parquet
 # ------------------------------------------------------------
-def build_s3_key(symbol: str, timeframe: str, start_ts: int) -> str:
-    """Build S3 key path based on timeframe partitioning."""
-    dt = datetime.fromtimestamp(start_ts, tz=timezone.utc)
+def build_s3_key(symbol: str, time_period: str) -> str:
+    """Build S3 key for combined quarterly export.
 
-    if timeframe in ["1m", "5m", "15m", "30m", "1h"]:
-        date_str = dt.strftime("%Y-%m-%d")
-        hour_str = dt.strftime("%H")
-        return f"symbol={symbol}/tf={timeframe}/date={date_str}/hour={hour_str}/data.parquet"
+    Args:
+        symbol: Market symbol (e.g., XBTUSD)
+        time_period: Quarter string (e.g., 2026_Q1)
 
-    if timeframe == "4h":
-        date_str = dt.strftime("%Y-%m-%d")
-        return f"symbol={symbol}/tf=4h/date={date_str}/data.parquet"
-
-    if timeframe == "1d":
-        date_str = dt.strftime("%Y-%m-%d")
-        return f"symbol={symbol}/tf=1d/date={date_str}/data.parquet"
-
-    if timeframe == "1w":
-        year, week, _ = dt.isocalendar()
-        week_str = f"{year}-W{week:02d}"
-        return f"symbol={symbol}/tf=1w/week={week_str}/data.parquet"
-
-    raise ValueError(f"Unsupported timeframe: {timeframe}")
+    Returns:
+        S3 key path like XBTUSD/2026-Q1/data.parquet
+    """
+    time_period = time_period.strip()
+    year_str, quarter_str = time_period.rsplit("_", 1)
+    return f"{symbol}/{year_str}-{quarter_str}/data.parquet"
 
 
 # ------------------------------------------------------------
@@ -244,85 +238,73 @@ def write_to_s3(buffer: io.BytesIO, s3_key: str) -> None:
 
 
 # ------------------------------------------------------------
-# Split time period into manageable chunks
+# Get all supported timeframes
 # ------------------------------------------------------------
-def split_time_period(start_ts: int, end_ts: int, timeframe: str) -> list:
+def get_all_timeframes() -> list:
+    """Return list of all supported timeframes."""
+    return SUPPORTED_TIMEFRAMES
+
+
+# ------------------------------------------------------------
+# Export all timeframes for a symbol into a single Parquet file
+# ------------------------------------------------------------
+def export_quarter(symbol: str, time_period: str, start_ts: int, end_ts: int) -> dict:
     """
-    Split a large time range into smaller chunks for incremental export.
+    Query DynamoDB for all timeframes, combine into a single Parquet file.
 
     Args:
-        start_ts: Start timestamp
-        end_ts: End timestamp
-        timeframe: Candle timeframe (determines chunk size)
-
-    Returns:
-        List of dicts with 'start_ts' and 'end_ts' for each chunk
-    """
-    start_dt = datetime.fromtimestamp(start_ts, tz=timezone.utc)
-    end_dt = datetime.fromtimestamp(end_ts, tz=timezone.utc)
-
-    # Define time unit and interval based on timeframe
-    if timeframe in ["1m", "5m", "15m", "30m", "1h"]:
-        time_unit = timedelta(hours=1)
-    elif timeframe in ["4h", "1d", "1w"]:
-        time_unit = timedelta(days=1)
-    else:
-        raise ValueError(f"Unsupported timeframe: {timeframe}")
-
-    time_periods = []
-    current_start = start_dt
-
-    while current_start < end_dt:
-        current_end = min(current_start + time_unit - timedelta(seconds=1), end_dt)
-        time_periods.append(
-            {
-                "start_ts": int(current_start.timestamp()),
-                "end_ts": int(current_end.timestamp()),
-            }
-        )
-        current_start += time_unit
-
-    return time_periods
-
-
-# ------------------------------------------------------------
-# Export a single time period chunk
-# ------------------------------------------------------------
-def export_chunk(symbol: str, timeframe: str, start_ts: int, end_ts: int) -> dict:
-    """
-    Export a single time period chunk: query DynamoDB, prepare data, write to S3.
+        symbol: Market symbol (e.g., XBTUSD)
+        time_period: Quarter string (e.g., 2026_Q1)
+        start_ts: Quarter start timestamp
+        end_ts: Quarter end timestamp
 
     Returns:
         Dict with status and metadata
     """
-    log_info(
-        "Exporting chunk",
-        symbol=symbol,
-        timeframe=timeframe,
-        start_ts=datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat(),
-        end_ts=datetime.fromtimestamp(end_ts, tz=timezone.utc).isoformat(),
-    )
+    timeframes = get_all_timeframes()
+    all_items = []
+    timeframe_counts = {}
 
-    items = query_dynamodb(symbol, timeframe, start_ts, end_ts)
+    for timeframe in timeframes:
+        log_info("Querying timeframe", symbol=symbol, timeframe=timeframe)
+        items = query_dynamodb(symbol, timeframe, start_ts, end_ts)
+        if items:
+            all_items.extend(items)
+            timeframe_counts[timeframe] = len(items)
+        else:
+            log_info("No data for timeframe", symbol=symbol, timeframe=timeframe)
 
-    if not items:
-        log_info("No data found for chunk", symbol=symbol, timeframe=timeframe)
-        return {"status": "empty", "symbol": symbol, "timeframe": timeframe}
+    if not all_items:
+        log_info("No data found for any timeframe", symbol=symbol, time_period=time_period)
+        return {
+            "status": "empty",
+            "symbol": symbol,
+            "time_period": time_period,
+            "total_records": 0,
+        }
 
-    df = prepare_dataframe(items)
+    df = prepare_dataframe(all_items)
     buffer = dataframe_to_parquet_buffer(df)
-    s3_key = build_s3_key(symbol, timeframe, start_ts)
+    s3_key = build_s3_key(symbol, time_period)
     write_to_s3(buffer, s3_key)
 
     log_info(
-        "Chunk exported",
+        "Quarter exported",
         symbol=symbol,
-        timeframe=timeframe,
+        time_period=time_period,
         s3_key=s3_key,
-        records=len(items),
+        total_records=len(all_items),
+        timeframe_counts=timeframe_counts,
     )
 
-    return {"status": "ok", "symbol": symbol, "timeframe": timeframe, "s3_key": s3_key, "records": len(items)}
+    return {
+        "status": "ok",
+        "symbol": symbol,
+        "time_period": time_period,
+        "s3_key": s3_key,
+        "total_records": len(all_items),
+        "timeframe_counts": timeframe_counts,
+    }
 
 
 # ------------------------------------------------------------
@@ -332,7 +314,7 @@ def main():
     """CLI entry point for quarterly market data export."""
     if len(sys.argv) < 2:
         log_error("Missing input JSON argument")
-        print("Usage: PYTHONPATH=../../layers/common-utils python main.py '{\"timeframe\":\"1m\",\"symbol\":\"XBTUSD\",\"time_period\":\"2026_Q1\"}'", file=sys.stderr)
+        print("Usage: PYTHONPATH=../../layers/common-utils python main.py '{\"symbol\":\"XBTUSD\",\"time_period\":\"2026_Q1\"}'", file=sys.stderr)
         sys.exit(1)
 
     # Parse JSON input
@@ -343,13 +325,8 @@ def main():
         sys.exit(1)
 
     # Validate required fields
-    timeframe = params.get("timeframe")
     symbol = params.get("symbol")
     time_period = params.get("time_period")
-
-    if not timeframe:
-        log_error("Missing required field: timeframe")
-        sys.exit(1)
 
     if not symbol:
         log_error("Missing required field: symbol")
@@ -359,11 +336,6 @@ def main():
         log_error("Missing required field: time_period")
         sys.exit(1)
 
-    # Validate timeframe
-    if timeframe not in SUPPORTED_TIMEFRAMES:
-        log_error("Unsupported timeframe", timeframe=timeframe, supported=SUPPORTED_TIMEFRAMES)
-        sys.exit(1)
-
     # Parse quarter time period
     try:
         start_ts, end_ts = parse_quarter(time_period)
@@ -371,49 +343,21 @@ def main():
         log_error(str(e))
         sys.exit(1)
 
-    log_info("Starting quarterly export", symbol=symbol, timeframe=timeframe, time_period=time_period)
+    log_info("Starting quarterly export", symbol=symbol, time_period=time_period)
 
-    # Split into chunks
-    chunks = split_time_period(start_ts, end_ts, timeframe)
-    total_chunks = len(chunks)
-
-    log_info(f"Will export {total_chunks} chunk(s)", symbol=symbol, timeframe=timeframe)
-
-    # Export each chunk
-    ok_count = 0
-    empty_count = 0
-    failed_chunks = []
-
-    for i, chunk in enumerate(chunks, 1):
-        log_info(f"Processing chunk {i}/{total_chunks}")
-
-        try:
-            result = export_chunk(symbol, timeframe, chunk["start_ts"], chunk["end_ts"])
-            if result["status"] == "ok":
-                ok_count += 1
-            elif result["status"] == "empty":
-                empty_count += 1
-        except Exception as e:
-            log_error(f"Failed to export chunk {i}", error=str(e))
-            failed_chunks.append({"chunk": i, "error": str(e)})
-
-    # Summary
-    log_info(
-        "Export completed",
-        symbol=symbol,
-        timeframe=timeframe,
-        time_period=time_period,
-        total_chunks=total_chunks,
-        exported_ok=ok_count,
-        empty_chunks=empty_count,
-        failed_chunks=len(failed_chunks),
-    )
-
-    if failed_chunks:
-        log_error("Failed chunks", failed=failed_chunks)
+    # Export all timeframes into a single file
+    try:
+        result = export_quarter(symbol, time_period, start_ts, end_ts)
+    except Exception as e:
+        log_error("Export failed", symbol=symbol, time_period=time_period, error=str(e))
         sys.exit(1)
+
+    if result["status"] == "empty":
+        print(f"No data found for {symbol} {time_period}")
     else:
-        print(f"Successfully exported {ok_count} chunk(s), {empty_count} empty chunk(s) for {symbol} {timeframe} {time_period}")
+        print(
+            f"Successfully exported {result['total_records']} records for {symbol} {time_period} -> {result['s3_key']}"
+        )
 
 
 if __name__ == "__main__":

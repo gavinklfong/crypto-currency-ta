@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 
 from main import (
     parse_quarter,
-    split_time_period,
+    get_all_timeframes,
     build_s3_key,
     prepare_dataframe,
     dataframe_to_parquet_buffer,
     query_dynamodb,
-    export_chunk,
+    export_quarter,
 )
 
 
@@ -82,77 +82,26 @@ def test_parse_quarter_invalid(time_period):
 
 
 # ------------------------------------------------------------
-# Split Time Period Tests
+# Get All Timeframes Tests
 # ------------------------------------------------------------
-class TestSplitTimePeriod:
-    def test_1m_splits_hourly(self):
-        """1m timeframe should split into 1-hour chunks."""
-        start_ts = ts("2024-05-25T00:00:00+00:00")
-        end_ts = ts("2024-05-25T05:30:00+00:00")
-
-        chunks = split_time_period(start_ts, end_ts, "1m")
-        assert len(chunks) == 6  # 6 hourly chunks
-
-        # Verify first chunk starts at 00:00
-        assert chunks[0]["start_ts"] == start_ts
-
-    def test_4h_splits_daily(self):
-        """4h timeframe should split into 1-day chunks."""
-        start_ts = ts("2024-05-25T00:00:00+00:00")
-        end_ts = ts("2024-05-27T23:59:59+00:00")
-
-        chunks = split_time_period(start_ts, end_ts, "4h")
-        assert len(chunks) == 3  # 3 daily chunks
-
-    def test_1d_splits_daily(self):
-        """1d timeframe should split into 1-day chunks."""
-        start_ts = ts("2024-05-25T00:00:00+00:00")
-        end_ts = ts("2024-05-27T23:59:59+00:00")
-
-        chunks = split_time_period(start_ts, end_ts, "1d")
-        assert len(chunks) == 3
-
-    def test_1w_splits_daily(self):
-        """1w timeframe should split into 1-day chunks."""
-        start_ts = ts("2024-05-25T00:00:00+00:00")
-        end_ts = ts("2024-05-31T23:59:59+00:00")
-
-        chunks = split_time_period(start_ts, end_ts, "1w")
-        assert len(chunks) == 7  # 7 days
-
-    def test_single_chunk(self):
-        """A single hour range should produce one chunk."""
-        start_ts = ts("2024-05-25T01:00:00+00:00")
-        end_ts = ts("2024-05-25T01:59:59+00:00")
-
-        chunks = split_time_period(start_ts, end_ts, "5m")
-        assert len(chunks) == 1
-
-    def test_unsupported_timeframe_raises(self):
-        with pytest.raises(ValueError):
-            split_time_period(0, 1000, "invalid")
+def test_get_all_timeframes():
+    """Should return all supported timeframes."""
+    result = get_all_timeframes()
+    assert result == ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
 
 
 # ------------------------------------------------------------
 # Build S3 Key Tests
 # ------------------------------------------------------------
-@pytest.mark.parametrize("timeframe, dt_str, expected", [
-    ("1m",  "2024-05-25T03:15:00", "symbol=XBTUSD/tf=1m/date=2024-05-25/hour=03/data.parquet"),
-    ("5m",  "2024-05-25T03:15:00", "symbol=XBTUSD/tf=5m/date=2024-05-25/hour=03/data.parquet"),
-    ("1h",  "2024-05-25T03:15:00", "symbol=XBTUSD/tf=1h/date=2024-05-25/hour=03/data.parquet"),
-    ("4h",  "2024-05-25T03:15:00", "symbol=XBTUSD/tf=4h/date=2024-05-25/data.parquet"),
-    ("1d",  "2024-05-25T10:00:00", "symbol=XBTUSD/tf=1d/date=2024-05-25/data.parquet"),
-    ("1w",  "2024-05-25T10:00:00", "symbol=XBTUSD/tf=1w/week=2024-W21/data.parquet"),
+@pytest.mark.parametrize("symbol, time_period, expected", [
+    ("XBTUSD", "2026_Q1", "XBTUSD/2026-Q1/data.parquet"),
+    ("ETHUSD", "2026_Q2", "ETHUSD/2026-Q2/data.parquet"),
+    ("LTCUSD", "2027_Q4", "LTCUSD/2027-Q4/data.parquet"),
+    ("XBTUSD", "  2026_Q1  ", "XBTUSD/2026-Q1/data.parquet"),
 ])
-def test_build_s3_key(timeframe, dt_str, expected):
-    start_ts = ts(dt_str)
-    key = build_s3_key("XBTUSD", timeframe, start_ts)
+def test_build_s3_key(symbol, time_period, expected):
+    key = build_s3_key(symbol, time_period)
     assert key == expected
-
-
-def test_build_s3_key_unsupported_raises():
-    with pytest.raises(ValueError):
-        build_s3_key("XBTUSD", "invalid", 0)
 
 
 # ------------------------------------------------------------
@@ -242,10 +191,10 @@ def test_query_dynamodb_pagination(mock_table, sample_items):
 
 
 # ------------------------------------------------------------
-# Export Chunk Test
+# Export Quarter Test
 # ------------------------------------------------------------
 @pytest.fixture
-def sample_items():
+def sample_items_1m():
     return [
         {
             "pair": "XBTUSD",
@@ -262,21 +211,46 @@ def sample_items():
     ]
 
 
-@patch("main.export_chunk")
-def test_export_chunk_success(mock_export, sample_items):
-    with patch("main.query_dynamodb", return_value=sample_items), \
-         patch("main.build_s3_key", return_value="test/key"), \
+@pytest.fixture
+def sample_items_5m():
+    return [
+        {
+            "pair": "XBTUSD",
+            "timeframe": "5m",
+            "timestamp": 1716615600,
+            "open": "100",
+            "high": "110",
+            "low": "90",
+            "close": "105",
+            "volume": "123.45",
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        }
+    ]
+
+
+def test_export_quarter_success(sample_items_1m):
+    """Should combine all timeframes and write a single Parquet file."""
+    start_ts = ts("2026-01-01T00:00:00+00:00")
+    end_ts = ts("2026-03-31T23:59:59+00:00")
+    with patch("main.query_dynamodb", return_value=sample_items_1m), \
+         patch("main.build_s3_key", return_value="XBTUSD/2026-Q1/data.parquet"), \
          patch("main.write_to_s3") as mock_write:
-        result = export_chunk("XBTUSD", "1m", ts("2024-05-25T00:00:00+00:00"),
-                              ts("2024-05-25T00:00:59+00:00"))
+        result = export_quarter("XBTUSD", "2026_Q1", start_ts, end_ts)
     assert result["status"] == "ok"
-    assert result["records"] == 1
+    # 8 timeframes × 1 item each = 8 total records
+    assert result["total_records"] == 8
+    assert result["s3_key"] == "XBTUSD/2026-Q1/data.parquet"
+    assert result["timeframe_counts"]["1m"] == 1
+    assert len(result["timeframe_counts"]) == 8
     mock_write.assert_called_once()
 
 
-@patch("main.query_dynamodb")
-def test_export_chunk_empty(mock_query):
-    mock_query.return_value = []
-    result = export_chunk("XBTUSD", "1m", ts("2024-05-25T00:00:00+00:00"),
-                          ts("2024-05-25T00:00:59+00:00"))
+def test_export_quarter_empty(sample_items_1m):
+    """Should return empty status when no data for any timeframe."""
+    start_ts = ts("2026-01-01T00:00:00+00:00")
+    end_ts = ts("2026-03-31T23:59:59+00:00")
+    with patch("main.query_dynamodb", return_value=[]):
+        result = export_quarter("XBTUSD", "2026_Q1", start_ts, end_ts)
     assert result["status"] == "empty"
+    assert result["total_records"] == 0
