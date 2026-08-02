@@ -73,10 +73,10 @@ def validate_input(event: dict[str, Any]) -> ValidationError | None:
     """
     detail = event.get("detail", {})
 
-    if not detail.get("symbol") or not detail.get("timeframe"):
+    if not detail.get("job_payload"):
         return ValidationError(
             status_code=400,
-            message="Missing symbol or timeframe in event detail",
+            message="Missing job_payload in event detail",
         )
 
     if not detail.get("job_script_name"):
@@ -150,15 +150,13 @@ def build_userdata(
     job_script_name: str,
     region: str,
     job_id: str,
-    symbol: str,
-    timeframe: str,
-    job_params_json: str,
+    job_payload: str,
 ) -> str:
     """Build the shell script executed by the EC2 instance on boot.
 
     The script downloads the job directory and common utilities from
-    S3, installs dependencies, runs the job, waits for log flush,
-    then shuts down.
+    S3, installs dependencies, runs the job with the provided
+    ``job_payload`` as input, waits for log flush, then shuts down.
     """
     return (
         f"#!/bin/bash\n"
@@ -193,8 +191,8 @@ def build_userdata(
         f"# Export job ID as environment variable\n"
         f"export TA_JOB_ID={job_id}\n\n"
 
-        f"# Execute the TA job main script with job params as JSON\n"
-        f"python3 /tmp/{job_script_name}/main.py '{job_params_json}'\n\n"
+        f"# Execute the TA job main script with job_payload as input\n"
+        f"python3 /tmp/{job_script_name}/main.py '{job_payload}'\n\n"
 
         f"# Sleep to allow logs to flush before shutdown\n"
         f"sleep {USER_DATA_SLEEP_SECONDS}\n\n"
@@ -247,11 +245,11 @@ def build_launch_kwargs(
             },
         }
         kwargs["TagSpecifications"][0]["Tags"].append(
-            {TAG_INSTANCE_TYPE_KEY: TAG_INSTANCE_TYPE_SPOT}
+            {"Key": TAG_INSTANCE_TYPE_KEY, "Value": TAG_INSTANCE_TYPE_SPOT}
         )
     else:
         kwargs["TagSpecifications"][0]["Tags"].append(
-            {TAG_INSTANCE_TYPE_KEY: TAG_INSTANCE_TYPE_ON_DEMAND}
+            {"Key": TAG_INSTANCE_TYPE_KEY, "Value": TAG_INSTANCE_TYPE_ON_DEMAND}
         )
 
     return kwargs
@@ -269,8 +267,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
         {
             "detail": {
-                "symbol": "XBTUSD",
-                "timeframe": "1h",
+                "job_payload": "{\"symbol\": \"XBTUSD\", \"timeframe\": \"1h\"}",
                 "job_script_name": "ta-job",
                 "instance_type": "large",        # optional
                 "spot_enabled": true,             # optional
@@ -286,9 +283,8 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         return {"statusCode": error.status_code, "body": json.dumps({"error": error.message})}
 
     detail = event.get("detail", {})
-    symbol: str = detail["symbol"]
-    timeframe: str = detail["timeframe"]
     job_script_name: str = detail["job_script_name"]
+    job_payload: str = detail["job_payload"]
 
     # 2. Resolve configuration
     launch_template_id = os.environ[ENV_LAUNCH_TEMPLATE_ID]
@@ -316,9 +312,8 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     # 4. Build UserData and EC2 launch config
     region = boto3.session.Session().region_name
-    job_params_json = json.dumps({"symbol": symbol, "timeframe": timeframe})
     userdata = build_userdata(
-        scripts_bucket, job_script_name, region, job_id, symbol, timeframe, job_params_json,
+        scripts_bucket, job_script_name, region, job_id, job_payload,
     )
     launch_kwargs = build_launch_kwargs(
         launch_template_id=launch_template_id,

@@ -19,8 +19,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD',
-                'timeframe': '1h',
+                'job_payload': '{"symbol": "XBTUSD", "timeframe": "1h"}',
                 'job_script_name': 'ta-job',
             }
         }
@@ -51,7 +50,7 @@ class TestLambdaHandler(unittest.TestCase):
         self.assertEqual(kwargs['LaunchTemplate']['LaunchTemplateId'], 'lt-12345678')
         self.assertEqual(kwargs['InstanceType'], 't3.medium')
 
-        # Check UserData contains expected env var and command with JSON params
+        # Check UserData contains expected env var and command with job_payload
         user_data_encoded = kwargs['UserData']
         user_data = base64.b64decode(user_data_encoded).decode('utf-8')
         self.assertIn('export TA_JOB_ID=', user_data)
@@ -71,8 +70,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD',
-                'timeframe': '1h',
+                'job_payload': '{"symbol": "XBTUSD", "timeframe": "1h"}',
                 'instance_type': 'large',
                 'job_script_name': 'ta-job',
             }
@@ -105,8 +103,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD',
-                'timeframe': '1h',
+                'job_payload': '{"symbol": "XBTUSD", "timeframe": "1h"}',
                 'job_script_name': 'ta-job',
             }
         }
@@ -133,13 +130,12 @@ class TestLambdaHandler(unittest.TestCase):
         'LAUNCH_TEMPLATE_ID': 'lt-12345678',
         'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
     })
-    def test_lambda_handler_missing_params(self, mock_job_status_class, mock_boto3):
+    def test_lambda_handler_missing_job_payload(self, mock_job_status_class, mock_boto3):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD',
                 'job_script_name': 'ta-job',
-                # Missing timeframe
+                # Missing job_payload
             }
         }
         context = MagicMock()
@@ -150,7 +146,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Assert
         self.assertEqual(response['statusCode'], 400)
         body = json.loads(response['body'])
-        self.assertIn('Missing symbol or timeframe', body['error'])
+        self.assertIn('Missing job_payload', body['error'])
 
     @patch('lambda_function.boto3')
     @patch('lambda_function.JobStatusClient')
@@ -162,8 +158,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD',
-                'timeframe': '1h',
+                'job_payload': '{"symbol": "XBTUSD", "timeframe": "1h"}',
                 # Missing job_script_name
             }
         }
@@ -190,8 +185,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD',
-                'timeframe': '1h',
+                'job_payload': '{"symbol": "XBTUSD", "timeframe": "1h"}',
                 'job_script_name': 'ta-job',
             }
         }
@@ -235,8 +229,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD',
-                'timeframe': '1h',
+                'job_payload': '{"symbol": "XBTUSD", "timeframe": "1h"}',
                 'job_script_name': 'ta-job',
                 'spot_enabled': True,
             }
@@ -273,8 +266,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD',
-                'timeframe': '1h',
+                'job_payload': '{"symbol": "XBTUSD", "timeframe": "1h"}',
                 'job_script_name': 'ta-job',
             }
         }
@@ -310,8 +302,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD',
-                'timeframe': '1h',
+                'job_payload': '{"symbol": "XBTUSD", "timeframe": "1h"}',
                 'job_script_name': 'ta-job',
             }
         }
@@ -344,8 +335,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD',
-                'timeframe': '1h',
+                'job_payload': '{"symbol": "XBTUSD", "timeframe": "1h"}',
                 'job_script_name': 'ta-job',
             }
         }
@@ -378,8 +368,7 @@ class TestLambdaHandler(unittest.TestCase):
         # Arrange
         event = {
             'detail': {
-                'symbol': 'XBTUSD',
-                'timeframe': '1h',
+                'job_payload': '{"symbol": "XBTUSD", "timeframe": "1h"}',
                 'job_script_name': 'ta-job',
             }
         }
