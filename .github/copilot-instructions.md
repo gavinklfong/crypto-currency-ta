@@ -36,7 +36,7 @@ Kraken API → fetch-market-data → DynamoDB (1m candles)
 
 ### Scheduled Workflows
 - **EventBridge Scheduler** — Dynamic rules for every `{symbol}-{timeframe}` combination drive recurring Lambda invocations. Rules are deduplicated when multiple Lambdas share the same schedule for a timeframe.
-- **On-Demand TA Jobs** — Long-running TA jobs are tracked via DynamoDB (`JOB#{job_id}`), launched on transient EC2 workers via `ec2-job-launcher`, monitored by `monitor-job-runner`, and reaped by `ec2-reaper`.
+- **On-Demand TA Jobs** — Long-running TA jobs are tracked via DynamoDB (`JOB#{job_id}`), launched on transient EC2 workers via `launch-ec2-job`, monitored by `monitor-job-runner`, and reaped by `ec2-reaper`.
 
 ### Lambda Functions (13 total)
 
@@ -47,7 +47,7 @@ Kraken API → fetch-market-data → DynamoDB (1m candles)
 | `calculate-ta` | Computes technical indicators (EMA, RSI, MACD, and 47 total TA indicators) on aggregated candles |
 | `ai-analysis` | Processes market data and generates AI analysis via Bedrock/LLM |
 | `send-to-slack` | Sends alerts and analysis results to Slack via webhook |
-| `ec2-job-launcher` | Launches transient EC2 workers for heavy TA jobs |
+| `launch-ec2-job` | Launches transient EC2 workers for heavy TA jobs |
 | `ec2-reaper` | Stops idle/overlong-running EC2 worker instances |
 | `monitor-job-runner` | Detects stalled jobs via heartbeat monitoring |
 | `update-job-status` | Updates DynamoDB job tracker status/heartbeat |

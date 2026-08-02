@@ -10,14 +10,14 @@ resource "aws_cloudwatch_event_rule" "ec2_job_trigger" {
 
 resource "aws_cloudwatch_event_target" "ec2_job_launcher_target" {
   rule      = aws_cloudwatch_event_rule.ec2_job_trigger.name
-  target_id = "ec2-job-launcher"
-  arn       = aws_lambda_function.lambda["ec2-job-launcher"].arn
+  target_id = "launch-ec2-job"
+  arn       = aws_lambda_function.lambda["launch-ec2-job"].arn
 }
 
 resource "aws_lambda_permission" "allow_ec2_job_trigger" {
-  statement_id  = "AllowEventBridgeToInvokeEC2JobLauncher"
+  statement_id  = "AllowEventBridgeToInvokeLaunchEC2Job"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.lambda["ec2-job-launcher"].function_name
+  function_name = aws_lambda_function.lambda["launch-ec2-job"].function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.ec2_job_trigger.arn
 }

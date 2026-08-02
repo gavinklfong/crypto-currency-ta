@@ -195,9 +195,9 @@ variable "lambdas" {
       zip_path      = "../build/package/lambdas/rerun-fetch-market-data.zip"
     }
 
-    "ec2-job-launcher" = {
-      function_name = "ec2-job-launcher"
-      zip_path      = "../build/package/lambdas/ec2-job-launcher.zip"
+    "launch-ec2-job" = {
+      function_name = "launch-ec2-job"
+      zip_path      = "../build/package/lambdas/launch-ec2-job.zip"
       is_launcher   = true
       environment = {
         INSTANCE_TYPE  = "small"
