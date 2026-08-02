@@ -2,6 +2,7 @@ import boto3
 import os
 import json
 import logging
+from botocore.exceptions import ClientError
 from datetime import datetime, timedelta, timezone
 from common.job_status_client import JobStatusClient
 from common_utils import send_to_sns
@@ -12,8 +13,13 @@ logger.setLevel(logging.INFO)
 ec2 = boto3.client('ec2')
 
 
-def _terminate_instance(instance_id, job_id, reason):
-    """Terminate an EC2 instance and mark the job as failed."""
+def _terminate_instance(instance_id, job_id, reason, slack_sns_topic_arn=None, job_type=None):
+    """Terminate an EC2 instance and mark the job as failed.
+
+    Returns a tuple ``(terminated, already_notified)``:
+    - ``terminated``: True if the job was successfully marked as failed.
+    - ``already_notified``: True if SNS was already sent (caller should skip its own notification).
+    """
     try:
         # Check if instance is already terminated (e.g., spot interruption)
         try:
@@ -23,7 +29,17 @@ def _terminate_instance(instance_id, job_id, reason):
                 logger.info("Instance %s already in state '%s'. Marking job %s as failed.", instance_id, state, job_id)
                 job_status = JobStatusClient()
                 job_status.fail_job(job_id, f"SPOT_INTERRUPTION: Instance {instance_id} externally terminated (state: {state})")
-                return True
+                return True, False
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'InvalidInstanceID.NotFound':
+                logger.info("Instance %s not found. Marking job %s as failed.", instance_id, job_id)
+                job_status = JobStatusClient()
+                job_status.fail_job(job_id, f"INSTANCE_NOT_FOUND: Instance {instance_id} no longer exists (likely externally terminated)")
+                if slack_sns_topic_arn and job_type:
+                    msg = f"\u26a0\ufe0f *Job Terminated*\n\n*Job ID:* {job_id}\n*Type:* {job_type}\n*Instance:* {instance_id}\n*Reason:* INSTANCE_NOT_FOUND - Instance no longer exists"
+                    send_to_sns(msg, topic_arn=slack_sns_topic_arn)
+                return True, True
+            logger.warning("Could not check instance state for %s: %s", instance_id, str(e))
         except Exception as e:
             logger.warning("Could not check instance state for %s: %s", instance_id, str(e))
 
@@ -35,11 +51,11 @@ def _terminate_instance(instance_id, job_id, reason):
         job_status.fail_job(job_id, f"TERMINATED_BY_MONITOR: {reason}")
 
         logger.info("Successfully terminated instance %s and updated job %s.", instance_id, job_id)
-        return True
+        return True, False
 
     except Exception as e:
         logger.error("Error terminating instance %s for job %s: %s", instance_id, job_id, str(e))
-        return False
+        return False, False
 
 
 def lambda_handler(event, context):
@@ -99,18 +115,29 @@ def lambda_handler(event, context):
         if instance_id and instance_id != 'PENDING':
             try:
                 # Terminate the EC2 instance
-                if _terminate_instance(instance_id, job_id, reason):
+                terminated, already_notified = _terminate_instance(instance_id, job_id, reason, slack_sns_topic_arn=slack_sns_topic_arn, job_type=job_type)
+                if terminated and not already_notified:
                     terminated_count += 1
-
-                # Send Slack notification via SNS
-                message = f"\u26a0\ufe0f *Job Terminated*\n\n*Job ID:* {job_id}\n*Type:* {job_type}\n*Instance:* {instance_id}\n*Reason:* {reason}"
-                send_to_sns(message, topic_arn=slack_sns_topic_arn)
-                logger.info(f"Successfully terminated job {job_id} and notified Slack")
+                    # Send Slack notification via SNS
+                    message = f"\u26a0\ufe0f *Job Terminated*\n\n*Job ID:* {job_id}\n*Type:* {job_type}\n*Instance:* {instance_id}\n*Reason:* {reason}"
+                    send_to_sns(message, topic_arn=slack_sns_topic_arn)
+                    logger.info(f"Successfully terminated job {job_id} and notified Slack")
+                elif terminated and already_notified:
+                    logger.info(f"Successfully terminated job {job_id} (SNS already sent)")
+                    terminated_count += 1
 
             except Exception as e:
                 logger.error(f"Failed to process job {job_id}: {str(e)}")
         else:
-            logger.warning("Job %s flagged but no valid instance_id found (or PENDING). Skipping termination.", job_id)
+            logger.warning("Job %s flagged but no valid instance_id found (or PENDING). Marking as failed.", job_id)
+            try:
+                job_status = JobStatusClient()
+                job_status.fail_job(job_id, f"ORPHANED: No valid EC2 instance (instance_id={instance_id})")
+                message = f"\u26a0\ufe0f *Job Terminated*\n\n*Job ID:* {job_id}\n*Type:* {job_type}\n*Instance:* {instance_id}\n*Reason:* ORPHANED - No valid EC2 instance found"
+                send_to_sns(message, topic_arn=slack_sns_topic_arn)
+                logger.info(f"Successfully marked job {job_id} as failed (orphaned)")
+            except Exception as e:
+                logger.error(f"Failed to mark job {job_id} as failed (orphaned): {str(e)}")
 
     return {
         'statusCode': 200,
