@@ -227,15 +227,7 @@ variable "lambdas" {
       timeframes    = []
       environment = {
         STALLED_THRESHOLD_MINUTES = "10"
-      }
-    }
-
-    "ec2-reaper" = {
-      function_name = "ec2-reaper"
-      zip_path      = "../build/package/lambdas/ec2-reaper.zip"
-      environment = {
-        MAX_INACTIVITY_MINUTES = "30"
-        MAX_LIFETIME_HOURS     = "8"
+        MAX_LIFETIME_HOURS        = "8"
       }
     }
   }

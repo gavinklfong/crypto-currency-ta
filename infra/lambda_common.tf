@@ -154,6 +154,23 @@ resource "aws_iam_role_policy" "lambda_ec2_run_instances" {
   })
 }
 
+resource "aws_iam_role_policy" "lambda_ec2_manage_instances" {
+  name = "lambda-ec2-manage-instances-policy"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ec2:DescribeInstances",
+        "ec2:TerminateInstances"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
 
 # Lambda Layers
 resource "aws_lambda_layer_version" "layers" {

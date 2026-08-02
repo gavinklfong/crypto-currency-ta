@@ -20,7 +20,6 @@ locals {
 
   # Map of special lambdas to their custom IAM roles
   lambda_roles = {
-    "ec2-reaper" = aws_iam_role.ec2_reaper_role.arn
   }
 }
 
