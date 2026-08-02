@@ -159,5 +159,187 @@ class TestLambdaHandler(unittest.TestCase):
         body = json.loads(response['body'])
         self.assertIn('Missing job_script_name in event detail', body['error'])
 
+    # ---- Spot Instance Tests ----
+
+    @patch('lambda_function.JobStatusClient')
+    @patch('lambda_function.ec2')
+    @patch.dict(os.environ, {
+        'LAUNCH_TEMPLATE_ID': 'lt-12345678',
+        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
+        'SPOT_ENABLED': 'true',
+    })
+    def test_lambda_handler_spot_enabled_via_env(self, mock_ec2, mock_job_status_class):
+        # Arrange
+        event = {
+            'detail': {
+                'symbol': 'XBTUSD',
+                'timeframe': '1h',
+                'job_script_name': 'ta-job'
+            }
+        }
+        context = MagicMock()
+        mock_ec2.run_instances.return_value = {'Instances': [{'InstanceId': 'i-spot123'}]}
+        mock_job_status_instance = mock_job_status_class.return_value
+
+        # Act
+        response = lambda_handler(event, context)
+
+        # Assert
+        self.assertEqual(response['statusCode'], 200)
+        args, kwargs = mock_ec2.run_instances.call_args
+        self.assertIn('InstanceMarketOptions', kwargs)
+        self.assertEqual(kwargs['InstanceMarketOptions']['MarketType'], 'spot')
+        self.assertEqual(kwargs['InstanceMarketOptions']['SpotOptions']['InstanceInterruptionBehavior'], 'terminate')
+        self.assertEqual(kwargs['InstanceMarketOptions']['SpotOptions']['SpotInstanceType'], 'one-time')
+
+        # Verify spot tag is present
+        tags = {tag['Key']: tag['Value'] for tag in kwargs['TagSpecifications'][0]['Tags']}
+        self.assertEqual(tags['InstanceType'], 'spot')
+
+    @patch('lambda_function.JobStatusClient')
+    @patch('lambda_function.ec2')
+    @patch.dict(os.environ, {
+        'LAUNCH_TEMPLATE_ID': 'lt-12345678',
+        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
+    })
+    def test_lambda_handler_spot_enabled_via_event(self, mock_ec2, mock_job_status_class):
+        # Arrange
+        event = {
+            'detail': {
+                'symbol': 'XBTUSD',
+                'timeframe': '1h',
+                'job_script_name': 'ta-job',
+                'spot_enabled': True
+            }
+        }
+        context = MagicMock()
+        mock_ec2.run_instances.return_value = {'Instances': [{'InstanceId': 'i-spot456'}]}
+        mock_job_status_instance = mock_job_status_class.return_value
+
+        # Act
+        response = lambda_handler(event, context)
+
+        # Assert
+        self.assertEqual(response['statusCode'], 200)
+        args, kwargs = mock_ec2.run_instances.call_args
+        self.assertIn('InstanceMarketOptions', kwargs)
+        self.assertEqual(kwargs['InstanceMarketOptions']['MarketType'], 'spot')
+        tags = {tag['Key']: tag['Value'] for tag in kwargs['TagSpecifications'][0]['Tags']}
+        self.assertEqual(tags['InstanceType'], 'spot')
+
+    @patch('lambda_function.JobStatusClient')
+    @patch('lambda_function.ec2')
+    @patch.dict(os.environ, {
+        'LAUNCH_TEMPLATE_ID': 'lt-12345678',
+        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
+        'SPOT_ENABLED': 'true',
+        'SPOT_MAX_PRICE': '0.05',
+    })
+    def test_lambda_handler_spot_with_max_price(self, mock_ec2, mock_job_status_class):
+        # Arrange
+        event = {
+            'detail': {
+                'symbol': 'XBTUSD',
+                'timeframe': '1h',
+                'job_script_name': 'ta-job'
+            }
+        }
+        context = MagicMock()
+        mock_ec2.run_instances.return_value = {'Instances': [{'InstanceId': 'i-spot789'}]}
+        mock_job_status_instance = mock_job_status_class.return_value
+
+        # Act
+        response = lambda_handler(event, context)
+
+        # Assert
+        args, kwargs = mock_ec2.run_instances.call_args
+        self.assertEqual(kwargs['InstanceMarketOptions']['SpotOptions']['MaxPrice'], '0.05')
+
+    @patch('lambda_function.JobStatusClient')
+    @patch('lambda_function.ec2')
+    @patch.dict(os.environ, {
+        'LAUNCH_TEMPLATE_ID': 'lt-12345678',
+        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
+        'SPOT_ENABLED': 'true',
+    })
+    def test_lambda_handler_spot_no_max_price_defaults_to_default(self, mock_ec2, mock_job_status_class):
+        # Arrange
+        event = {
+            'detail': {
+                'symbol': 'XBTUSD',
+                'timeframe': '1h',
+                'job_script_name': 'ta-job'
+            }
+        }
+        context = MagicMock()
+        mock_ec2.run_instances.return_value = {'Instances': [{'InstanceId': 'i-spot-default'}]}
+        mock_job_status_instance = mock_job_status_class.return_value
+
+        # Act
+        response = lambda_handler(event, context)
+
+        # Assert
+        args, kwargs = mock_ec2.run_instances.call_args
+        # When no max price specified, it should be None (uses on-demand price)
+        self.assertIsNone(kwargs['InstanceMarketOptions']['SpotOptions']['MaxPrice'])
+
+    @patch('lambda_function.JobStatusClient')
+    @patch('lambda_function.ec2')
+    @patch.dict(os.environ, {
+        'LAUNCH_TEMPLATE_ID': 'lt-12345678',
+        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
+    })
+    def test_lambda_handler_no_spot_by_default(self, mock_ec2, mock_job_status_class):
+        # Arrange
+        event = {
+            'detail': {
+                'symbol': 'XBTUSD',
+                'timeframe': '1h',
+                'job_script_name': 'ta-job'
+            }
+        }
+        context = MagicMock()
+        mock_ec2.run_instances.return_value = {'Instances': [{'InstanceId': 'i-on-demand'}]}
+        mock_job_status_instance = mock_job_status_class.return_value
+
+        # Act
+        response = lambda_handler(event, context)
+
+        # Assert
+        args, kwargs = mock_ec2.run_instances.call_args
+        self.assertNotIn('InstanceMarketOptions', kwargs)
+        tags = {tag['Key']: tag['Value'] for tag in kwargs['TagSpecifications'][0]['Tags']}
+        self.assertEqual(tags['InstanceType'], 'on-demand')
+
+    @patch('lambda_function.JobStatusClient')
+    @patch('lambda_function.ec2')
+    @patch.dict(os.environ, {
+        'LAUNCH_TEMPLATE_ID': 'lt-12345678',
+        'JOB_SCRIPTS_BUCKET_NAME': 'test-bucket',
+        'SPOT_ENABLED': 'false',
+    })
+    def test_lambda_handler_spot_disabled_via_env(self, mock_ec2, mock_job_status_class):
+        # Arrange
+        event = {
+            'detail': {
+                'symbol': 'XBTUSD',
+                'timeframe': '1h',
+                'job_script_name': 'ta-job'
+            }
+        }
+        context = MagicMock()
+        mock_ec2.run_instances.return_value = {'Instances': [{'InstanceId': 'i-ondemand-false'}]}
+        mock_job_status_instance = mock_job_status_class.return_value
+
+        # Act
+        response = lambda_handler(event, context)
+
+        # Assert
+        args, kwargs = mock_ec2.run_instances.call_args
+        self.assertNotIn('InstanceMarketOptions', kwargs)
+        tags = {tag['Key']: tag['Value'] for tag in kwargs['TagSpecifications'][0]['Tags']}
+        self.assertEqual(tags['InstanceType'], 'on-demand')
+
+
 if __name__ == '__main__':
     unittest.main()

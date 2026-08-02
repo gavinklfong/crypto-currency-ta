@@ -200,7 +200,9 @@ variable "lambdas" {
       zip_path      = "../build/package/lambdas/ec2-job-launcher.zip"
       is_launcher   = true
       environment = {
-        INSTANCE_TYPE = "small"
+        INSTANCE_TYPE  = "small"
+        SPOT_ENABLED   = "false"
+        SPOT_MAX_PRICE = ""
       }
     }
 

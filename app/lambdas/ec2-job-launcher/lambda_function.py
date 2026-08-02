@@ -16,6 +16,16 @@ INSTANCE_TYPE_MAP = {
     "large": "t3.large"
 }
 
+def _resolve_spot_config(event):
+    """Resolve spot instance configuration from event detail or environment variables.
+
+    Returns a tuple of (spot_enabled: bool, spot_max_price: str).
+    """
+    detail = event.get('detail', {})
+    spot_enabled = str(detail.get('spot_enabled', os.environ.get('SPOT_ENABLED', 'false'))).lower() == 'true'
+    spot_max_price = detail.get('spot_max_price', os.environ.get('SPOT_MAX_PRICE', ''))
+    return spot_enabled, spot_max_price
+
 def lambda_handler(event, context):
     launch_template_id = os.environ.get('LAUNCH_TEMPLATE_ID')
     scripts_bucket = os.environ.get('JOB_SCRIPTS_BUCKET_NAME')
@@ -61,6 +71,13 @@ def lambda_handler(event, context):
     instance_type_key = event_instance_type_key or default_instance_type_key
     aws_instance_type = INSTANCE_TYPE_MAP.get(instance_type_key, INSTANCE_TYPE_MAP['small'])
     logger.info("Selected instance type: %s (from key: %s)", aws_instance_type, instance_type_key)
+
+    # Resolve spot configuration
+    spot_enabled, spot_max_price = _resolve_spot_config(event)
+    if spot_enabled:
+        logger.info("Spot instances enabled (max price: %s)", spot_max_price or 'default')
+    else:
+        logger.info("Spot instances disabled, using on-demand")
 
     # Generate a unique job ID
     job_id = str(uuid.uuid4())
@@ -133,13 +150,13 @@ sudo shutdown -h now
     logger.info("Launching EC2 instance with Launch Template: %s and Instance Type: %s", launch_template_id, aws_instance_type)
 
     try:
-        response = ec2.run_instances(
-            LaunchTemplate={'LaunchTemplateId': launch_template_id},
-            InstanceType=aws_instance_type,
-            MinCount=1,
-            MaxCount=1,
-            UserData=base64.b64encode(full_user_data.encode('utf-8')).decode('utf-8'),
-            TagSpecifications=[
+        run_instances_kwargs = {
+            'LaunchTemplate': {'LaunchTemplateId': launch_template_id},
+            'InstanceType': aws_instance_type,
+            'MinCount': 1,
+            'MaxCount': 1,
+            'UserData': base64.b64encode(full_user_data.encode('utf-8')).decode('utf-8'),
+            'TagSpecifications': [
                 {
                     'ResourceType': 'instance',
                     'Tags': [
@@ -148,7 +165,26 @@ sudo shutdown -h now
                     ]
                 }
             ]
-        )
+        }
+
+        if spot_enabled:
+            run_instances_kwargs['InstanceMarketOptions'] = {
+                'MarketType': 'spot',
+                'SpotOptions': {
+                    'MaxPrice': spot_max_price or None,
+                    'InstanceInterruptionBehavior': 'terminate',
+                    'SpotInstanceType': 'one-time'
+                }
+            }
+            run_instances_kwargs['TagSpecifications'][0]['Tags'].append(
+                {'Key': 'InstanceType', 'Value': 'spot'}
+            )
+        else:
+            run_instances_kwargs['TagSpecifications'][0]['Tags'].append(
+                {'Key': 'InstanceType', 'Value': 'on-demand'}
+            )
+
+        response = ec2.run_instances(**run_instances_kwargs)
 
         instance_id = response['Instances'][0]['InstanceId']
         logger.info("Successfully launched instance: %s", instance_id)

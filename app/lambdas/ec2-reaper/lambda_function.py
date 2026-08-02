@@ -61,6 +61,18 @@ def lambda_handler(event, context):
 
             if instance_id and instance_id != "PENDING":
                 try:
+                    # Check if instance is already terminated (e.g., spot interruption)
+                    try:
+                        instance_state = ec2.describe_instances(InstanceIds=[instance_id])
+                        state = instance_state['Reservations'][0]['Instances'][0].get('State', {}).get('Name', 'unknown')
+                        if state in ('shutting-down', 'terminated', 'stopping', 'stopped'):
+                            logger.info("Instance %s already in state '%s'. Marking job as failed.", instance_id, state)
+                            job_status.fail_job(job_id, f"SPOT_INTERRUPTION: Instance {instance_id} externally terminated (state: {state})")
+                            terminated_count += 1
+                            continue
+                    except Exception as e:
+                        logger.warning("Could not check instance state for %s: %s", instance_id, str(e))
+
                     logger.info("Terminating instance %s for job %s...", instance_id, job_id)
                     ec2.terminate_instances(InstanceIds=[instance_id])
 
