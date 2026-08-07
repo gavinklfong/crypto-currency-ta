@@ -266,7 +266,8 @@ def get_all_timeframes() -> list:
 # ------------------------------------------------------------
 # Export all timeframes for a symbol into separate Parquet files
 # ------------------------------------------------------------
-def export_quarter(symbol: str, time_period: str, start_ts: int, end_ts: int) -> dict:
+def export_quarter(symbol: str, time_period: str, start_ts: int, end_ts: int,
+                   client: JobStatusClient, job_id: str) -> dict:
     """
     Query DynamoDB for each timeframe, write a separate Parquet file per timeframe.
 
@@ -275,6 +276,8 @@ def export_quarter(symbol: str, time_period: str, start_ts: int, end_ts: int) ->
         time_period: Quarter string (e.g., 2026_Q1)
         start_ts: Quarter start timestamp
         end_ts: Quarter end timestamp
+        client: JobStatusClient for progress reporting
+        job_id: Job identifier for progress tracking
 
     Returns:
         Dict with status, metadata, and per-timeframe details
@@ -283,7 +286,7 @@ def export_quarter(symbol: str, time_period: str, start_ts: int, end_ts: int) ->
     all_records = 0
     timeframe_details = {}
 
-    for timeframe in timeframes:
+    for i, timeframe in enumerate(timeframes):
         log_info("Querying timeframe", symbol=symbol, timeframe=timeframe)
         items = query_dynamodb(symbol, timeframe, start_ts, end_ts)
         if not items:
@@ -300,6 +303,12 @@ def export_quarter(symbol: str, time_period: str, start_ts: int, end_ts: int) ->
             "records": len(items),
             "s3_key": s3_key,
         }
+        progress = int((i + 1) / len(timeframes) * 100)
+        try:
+            client.report_progress(job_id, progress)
+        except Exception as e:
+            logger.warning("Failed to report progress", error=str(e))
+
         log_info(
             "Timeframe exported",
             symbol=symbol,
@@ -387,7 +396,7 @@ def main():
 
         try:
             # Export all timeframes into a single file
-            result = export_quarter(symbol, time_period, start_ts, end_ts)
+            result = export_quarter(symbol, time_period, start_ts, end_ts, client, job_id)
         finally:
             # Ensure heartbeat thread is stopped even if export fails or is interrupted
             heartbeat_thread.stop()

@@ -10,6 +10,7 @@ from main import (
     dataframe_to_parquet_buffer,
     query_dynamodb,
     export_quarter,
+    JobStatusClient,
 )
 
 
@@ -240,9 +241,10 @@ def test_export_quarter_success(sample_items_1m):
     """Should write one Parquet file per timeframe and return per-timeframe metadata."""
     start_ts = ts("2026-01-01T00:00:00+00:00")
     end_ts = ts("2026-03-31T23:59:59+00:00")
+    mock_client = MagicMock()
     with patch("main.query_dynamodb", return_value=sample_items_1m), \
          patch("main.write_to_s3") as mock_write:
-        result = export_quarter("XBTUSD", "2026_Q1", start_ts, end_ts)
+        result = export_quarter("XBTUSD", "2026_Q1", start_ts, end_ts, mock_client, "test-job")
     assert result["status"] == "ok"
     assert result["total_records"] == 8
     assert result["timeframes_exported"] == 8
@@ -259,8 +261,9 @@ def test_export_quarter_empty(sample_items_1m):
     """Should return empty status when no data for any timeframe."""
     start_ts = ts("2026-01-01T00:00:00+00:00")
     end_ts = ts("2026-03-31T23:59:59+00:00")
+    mock_client = MagicMock()
     with patch("main.query_dynamodb", return_value=[]):
-        result = export_quarter("XBTUSD", "2026_Q1", start_ts, end_ts)
+        result = export_quarter("XBTUSD", "2026_Q1", start_ts, end_ts, mock_client, "test-job")
     assert result["status"] == "empty"
     assert result["total_records"] == 0
     assert result["timeframes_exported"] == 0
