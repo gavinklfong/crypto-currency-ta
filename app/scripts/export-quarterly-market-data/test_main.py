@@ -93,14 +93,21 @@ def test_get_all_timeframes():
 # ------------------------------------------------------------
 # Build S3 Key Tests
 # ------------------------------------------------------------
-@pytest.mark.parametrize("symbol, time_period, expected", [
-    ("XBTUSD", "2026_Q1", "XBTUSD/2026-Q1/data.parquet"),
-    ("ETHUSD", "2026_Q2", "ETHUSD/2026-Q2/data.parquet"),
-    ("LTCUSD", "2027_Q4", "LTCUSD/2027-Q4/data.parquet"),
-    ("XBTUSD", "  2026_Q1  ", "XBTUSD/2026-Q1/data.parquet"),
+@pytest.mark.parametrize("symbol, time_period, timeframe, expected", [
+    ("XBTUSD", "2026_Q1", "1m", "XBTUSD/2026-Q1/tf=1m/data.parquet"),
+    ("XBTUSD", "2026_Q1", "5m", "XBTUSD/2026-Q1/tf=5m/data.parquet"),
+    ("XBTUSD", "2026_Q1", "15m", "XBTUSD/2026-Q1/tf=15m/data.parquet"),
+    ("XBTUSD", "2026_Q1", "30m", "XBTUSD/2026-Q1/tf=30m/data.parquet"),
+    ("XBTUSD", "2026_Q1", "1h", "XBTUSD/2026-Q1/tf=1h/data.parquet"),
+    ("XBTUSD", "2026_Q1", "4h", "XBTUSD/2026-Q1/tf=4h/data.parquet"),
+    ("XBTUSD", "2026_Q1", "1d", "XBTUSD/2026-Q1/tf=1d/data.parquet"),
+    ("XBTUSD", "2026_Q1", "1w", "XBTUSD/2026-Q1/tf=1w/data.parquet"),
+    ("ETHUSD", "2026_Q2", "5m", "ETHUSD/2026-Q2/tf=5m/data.parquet"),
+    ("LTCUSD", "2027_Q4", "1d", "LTCUSD/2027-Q4/tf=1d/data.parquet"),
+    ("XBTUSD", "  2026_Q1  ", "5m", "XBTUSD/2026-Q1/tf=5m/data.parquet"),
 ])
-def test_build_s3_key(symbol, time_period, expected):
-    key = build_s3_key(symbol, time_period)
+def test_build_s3_key(symbol, time_period, timeframe, expected):
+    key = build_s3_key(symbol, time_period, timeframe)
     assert key == expected
 
 
@@ -230,20 +237,22 @@ def sample_items_5m():
 
 
 def test_export_quarter_success(sample_items_1m):
-    """Should combine all timeframes and write a single Parquet file."""
+    """Should write one Parquet file per timeframe and return per-timeframe metadata."""
     start_ts = ts("2026-01-01T00:00:00+00:00")
     end_ts = ts("2026-03-31T23:59:59+00:00")
     with patch("main.query_dynamodb", return_value=sample_items_1m), \
-         patch("main.build_s3_key", return_value="XBTUSD/2026-Q1/data.parquet"), \
          patch("main.write_to_s3") as mock_write:
         result = export_quarter("XBTUSD", "2026_Q1", start_ts, end_ts)
     assert result["status"] == "ok"
-    # 8 timeframes × 1 item each = 8 total records
     assert result["total_records"] == 8
-    assert result["s3_key"] == "XBTUSD/2026-Q1/data.parquet"
-    assert result["timeframe_counts"]["1m"] == 1
-    assert len(result["timeframe_counts"]) == 8
-    mock_write.assert_called_once()
+    assert result["timeframes_exported"] == 8
+    assert len(result["timeframe_details"]) == 8
+    assert result["timeframe_details"]["1m"]["records"] == 1
+    assert result["timeframe_details"]["1m"]["s3_key"] == "XBTUSD/2026-Q1/tf=1m/data.parquet"
+    assert result["timeframe_details"]["5m"]["s3_key"] == "XBTUSD/2026-Q1/tf=5m/data.parquet"
+    assert result["timeframe_details"]["1w"]["s3_key"] == "XBTUSD/2026-Q1/tf=1w/data.parquet"
+    # 8 S3 writes (one per timeframe)
+    assert mock_write.call_count == 8
 
 
 def test_export_quarter_empty(sample_items_1m):
@@ -254,3 +263,4 @@ def test_export_quarter_empty(sample_items_1m):
         result = export_quarter("XBTUSD", "2026_Q1", start_ts, end_ts)
     assert result["status"] == "empty"
     assert result["total_records"] == 0
+    assert result["timeframes_exported"] == 0

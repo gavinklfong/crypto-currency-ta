@@ -2,12 +2,13 @@
 """
 CLI script to export quarterly market data from DynamoDB to S3 as Parquet files.
 
-All timeframes are combined into a single Parquet file per symbol per quarter.
+Each timeframe is exported as a separate Parquet file per symbol per quarter.
 
 Usage:
     PYTHONPATH=../../layers/common-utils python main.py '{"symbol":"XBTUSD","time_period":"2026_Q1"}'
 
-S3 key format: <symbol>/<yyyy-QQ>/data.parquet (e.g., XBTUSD/2026-Q1/data.parquet)
+S3 key format: <symbol>/<yyyy-QQ>/tf=<timeframe>/data.parquet
+(e.g., XBTUSD/2026-Q1/tf=5m/data.parquet)
 """
 import sys
 import json
@@ -208,21 +209,22 @@ def dataframe_to_parquet_buffer(df: pd.DataFrame) -> io.BytesIO:
 
 
 # ------------------------------------------------------------
-# Build S3 key: <symbol>/<yyyy-QQ>/data.parquet
+# Build S3 key: <symbol>/<yyyy-QQ>/tf=<timeframe>/data.parquet
 # ------------------------------------------------------------
-def build_s3_key(symbol: str, time_period: str) -> str:
-    """Build S3 key for combined quarterly export.
+def build_s3_key(symbol: str, time_period: str, timeframe: str) -> str:
+    """Build S3 key for per-timeframe quarterly export.
 
     Args:
         symbol: Market symbol (e.g., XBTUSD)
         time_period: Quarter string (e.g., 2026_Q1)
+        timeframe: Timeframe identifier (e.g., 5m, 1h)
 
     Returns:
-        S3 key path like XBTUSD/2026-Q1/data.parquet
+        S3 key path like XBTUSD/2026-Q1/tf=5m/data.parquet
     """
     time_period = time_period.strip()
     year_str, quarter_str = time_period.rsplit("_", 1)
-    return f"{symbol}/{year_str}-{quarter_str}/data.parquet"
+    return f"{symbol}/{year_str}-{quarter_str}/tf={timeframe}/data.parquet"
 
 
 # ------------------------------------------------------------
@@ -246,11 +248,11 @@ def get_all_timeframes() -> list:
 
 
 # ------------------------------------------------------------
-# Export all timeframes for a symbol into a single Parquet file
+# Export all timeframes for a symbol into separate Parquet files
 # ------------------------------------------------------------
 def export_quarter(symbol: str, time_period: str, start_ts: int, end_ts: int) -> dict:
     """
-    Query DynamoDB for all timeframes, combine into a single Parquet file.
+    Query DynamoDB for each timeframe, write a separate Parquet file per timeframe.
 
     Args:
         symbol: Market symbol (e.g., XBTUSD)
@@ -259,51 +261,62 @@ def export_quarter(symbol: str, time_period: str, start_ts: int, end_ts: int) ->
         end_ts: Quarter end timestamp
 
     Returns:
-        Dict with status and metadata
+        Dict with status, metadata, and per-timeframe details
     """
     timeframes = get_all_timeframes()
-    all_items = []
-    timeframe_counts = {}
+    all_records = 0
+    timeframe_details = {}
 
     for timeframe in timeframes:
         log_info("Querying timeframe", symbol=symbol, timeframe=timeframe)
         items = query_dynamodb(symbol, timeframe, start_ts, end_ts)
-        if items:
-            all_items.extend(items)
-            timeframe_counts[timeframe] = len(items)
-        else:
+        if not items:
             log_info("No data for timeframe", symbol=symbol, timeframe=timeframe)
+            continue
 
-    if not all_items:
+        df = prepare_dataframe(items)
+        buffer = dataframe_to_parquet_buffer(df)
+        s3_key = build_s3_key(symbol, time_period, timeframe)
+        write_to_s3(buffer, s3_key)
+
+        all_records += len(items)
+        timeframe_details[timeframe] = {
+            "records": len(items),
+            "s3_key": s3_key,
+        }
+        log_info(
+            "Timeframe exported",
+            symbol=symbol,
+            timeframe=timeframe,
+            records=len(items),
+            s3_key=s3_key,
+        )
+
+    if not timeframe_details:
         log_info("No data found for any timeframe", symbol=symbol, time_period=time_period)
         return {
             "status": "empty",
             "symbol": symbol,
             "time_period": time_period,
             "total_records": 0,
+            "timeframes_exported": 0,
         }
-
-    df = prepare_dataframe(all_items)
-    buffer = dataframe_to_parquet_buffer(df)
-    s3_key = build_s3_key(symbol, time_period)
-    write_to_s3(buffer, s3_key)
 
     log_info(
         "Quarter exported",
         symbol=symbol,
         time_period=time_period,
-        s3_key=s3_key,
-        total_records=len(all_items),
-        timeframe_counts=timeframe_counts,
+        total_records=all_records,
+        timeframe_details=timeframe_details,
     )
 
     return {
         "status": "ok",
         "symbol": symbol,
         "time_period": time_period,
-        "s3_key": s3_key,
-        "total_records": len(all_items),
-        "timeframe_counts": timeframe_counts,
+        "total_records": all_records,
+        "timeframes_exported": len(timeframe_details),
+        "timeframe_details": timeframe_details,
     }
 
 
@@ -356,8 +369,11 @@ def main():
         print(f"No data found for {symbol} {time_period}")
     else:
         print(
-            f"Successfully exported {result['total_records']} records for {symbol} {time_period} -> {result['s3_key']}"
+            f"Successfully exported {result['total_records']} records for {symbol} {time_period} "
+            f"({result['timeframes_exported']} timeframes)"
         )
+        for tf, details in result["timeframe_details"].items():
+            print(f"  tf={tf}: {details['records']} records -> {details['s3_key']}")
 
 
 if __name__ == "__main__":
