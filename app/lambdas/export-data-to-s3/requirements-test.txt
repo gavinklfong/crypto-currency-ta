@@ -1,6 +1,0 @@
-boto3
-pandas
-pyarrow
-pytest
-pytest-mock
-freezegun

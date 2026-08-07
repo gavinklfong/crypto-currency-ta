@@ -1,5 +1,0 @@
-boto3
-
-# pandas and pyarrow are included in the pandas_pyarrow layer, so we don't need to include them here.
-# pandas
-# pyarrow

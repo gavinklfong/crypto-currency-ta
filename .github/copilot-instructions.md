@@ -52,7 +52,7 @@ Kraken API → fetch-market-data → DynamoDB (1m candles)
 | `update-job-status` | Updates DynamoDB job tracker status/heartbeat |
 | `rerun-controller` | Orchestrates rerun pipelines for failed jobs |
 | `rerun-fetch-market-data` | Re-fetches market data for a specific symbol/timeframe |
-| `export-data-to-s3` / `trigger-data-export` | Exports DynamoDB data to S3 as Parquet files |
+| `launch-ec2-job` | Launches transient EC2 workers for heavy jobs |
 
 ### Lambda Layers (3 total)
 - **`pandas`** — Built with Dockerfile (multi-stage) + `build.sh`

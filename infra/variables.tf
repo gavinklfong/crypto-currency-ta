@@ -80,7 +80,6 @@ variable "fifo_queues" {
   default = {
     "calculate-ta"        = "crypto-currency-ta-calculate-ta.fifo"
     "aggregate-timeframe" = "crypto-currency-ta-aggregate-timeframe.fifo"
-    "export-data-to-s3"   = "crypto-currency-ta-export-data-to-s3.fifo"
   }
 }
 
@@ -167,23 +166,6 @@ variable "lambdas" {
       function_name = "aggregate-timeframe"
       zip_path      = "../build/package/lambdas/aggregate-timeframe.zip"
       timeframes    = ["5m", "15m", "30m", "1h", "4h", "1d", "1w"]
-    }
-
-    "export-data-to-s3" = {
-      function_name = "export-data-to-s3"
-      zip_path      = "../build/package/lambdas/export-data-to-s3.zip"
-      layers        = ["pandas", "pyarrow"]
-      timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
-      # Custom schedule overrides for export function:
-      schedule_overrides = {
-        "1m"  = "rate(1 hour)"
-        "5m"  = "rate(1 hour)"
-        "15m" = "rate(1 hour)"
-        "30m" = "rate(1 hour)"
-        "1h"  = "rate(1 hour)"
-        "4h"  = "rate(1 day)"
-        "1d"  = "rate(1 day)"
-      }
     }
 
     "rerun-controller" = {

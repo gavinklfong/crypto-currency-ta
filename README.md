@@ -28,7 +28,6 @@ The system runs on automated schedules via AWS EventBridge and can be triggered 
 │   │   ├── aggregate-timeframe/   # Aggregates 1m candles to larger timeframes
 │   │   ├── ai-analysis/           # AI-based market analysis
 │   │   ├── calculate-ta/          # Calculates technical indicators (EMA, RSI, MACD)
-│   │   ├── export-data-to-s3/     # Exports data to Amazon S3
 │   │   ├── fetch-market-data/     # Fetches OHLC data from Kraken API
 │   │   ├── rerun-controller/      # Manages and controls the rerunning of Lambda functions
 │   │   ├── rerun-fetch-market-data/ # Specifically handles rerunning the market data fetch
@@ -59,7 +58,6 @@ The system runs on automated schedules via AWS EventBridge and can be triggered 
 | **aggregate-timeframe** | Groups 1-minute candles into larger timeframes (5m, 15m, etc.) and calculates OHLCV + derived metrics (VWAP, Heikin-Ashi, typical price) |
 | **calculate-ta** | Computes EMA, RSI, and MACD technical indicators on aggregated candles and stores results in DynamoDB |
 | **ai-analysis** | Performs AI-driven market analysis |
-| **export-data-to-s3** | Exports historical or aggregated data to Amazon S3 |
 | **rerun-controller** | Manages and controls the rerunning of various Lambda functions |
 | **rerun-fetch-market-data** | Specifically handles rerunning the market data fetching process |
 | **send-to-slack** | Sends alerts and notifications to a configured Slack channel |
