@@ -4,8 +4,21 @@ CLI script to export quarterly market data from DynamoDB to S3 as Parquet files.
 
 Each timeframe is exported as a separate Parquet file per symbol per quarter.
 
-Usage:
-    PYTHONPATH=../../layers/common-utils python main.py '{"symbol":"XBTUSD","time_period":"2026_Q1"}'
+Usage (local):
+    PYTHONPATH=../../layers/common-utils python main.py '{"symbol":"XBTUSD","time_period":"2026_Q1"}' --job-id JOB_ID
+
+Usage (via EventBridge / launch-ec2-job):
+    Send an event like the following to trigger the job on an EC2 worker:
+
+    {
+      "source": "my.crypto.ta.app",
+      "detail-type": "start-long-running-job",
+      "detail": {
+        "job_script_name": "export-quarterly-market-data",
+        "job_payload": "{\"symbol\":\"XBTUSD\",\"time_period\":\"2026_Q1\"}",
+        "instance_type": "large"
+      }
+    }
 
 S3 key format: <symbol>/<yyyy-QQ>/tf=<timeframe>/data.parquet
 (e.g., XBTUSD/2026-Q1/tf=5m/data.parquet)
@@ -13,6 +26,7 @@ S3 key format: <symbol>/<yyyy-QQ>/tf=<timeframe>/data.parquet
 import sys
 import json
 import logging
+import argparse
 from datetime import datetime, timezone
 from typing import Tuple
 
@@ -21,6 +35,8 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import io
+
+from common.job_status_client import JobStatusClient, HeartbeatThread
 
 logging.basicConfig(
     level=logging.INFO,
@@ -325,14 +341,18 @@ def export_quarter(symbol: str, time_period: str, start_ts: int, end_ts: int) ->
 # ------------------------------------------------------------
 def main():
     """CLI entry point for quarterly market data export."""
-    if len(sys.argv) < 2:
-        log_error("Missing input JSON argument")
-        print("Usage: PYTHONPATH=../../layers/common-utils python main.py '{\"symbol\":\"XBTUSD\",\"time_period\":\"2026_Q1\"}'", file=sys.stderr)
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Export quarterly market data from DynamoDB to S3")
+    parser.add_argument("params", type=str, help="JSON string with 'symbol' and 'time_period' fields")
+    parser.add_argument("--job-id", type=str, default=None, help="Job ID for heartbeat tracking")
+
+    # Parse args (the JSON params must come first)
+    args, remaining = parser.parse_known_args()
+
+    job_id = args.job_id
 
     # Parse JSON input
     try:
-        params = json.loads(sys.argv[1])
+        params = json.loads(args.params)
     except json.JSONDecodeError as e:
         log_error("Invalid JSON input", error=str(e))
         sys.exit(1)
@@ -358,22 +378,39 @@ def main():
 
     log_info("Starting quarterly export", symbol=symbol, time_period=time_period)
 
-    # Export all timeframes into a single file
+    client = JobStatusClient()
+
     try:
-        result = export_quarter(symbol, time_period, start_ts, end_ts)
+        # Start the heartbeat thread
+        heartbeat_thread = HeartbeatThread(client, job_id, interval=30)
+        heartbeat_thread.start()
+
+        try:
+            # Export all timeframes into a single file
+            result = export_quarter(symbol, time_period, start_ts, end_ts)
+        finally:
+            # Ensure heartbeat thread is stopped even if export fails or is interrupted
+            heartbeat_thread.stop()
+            heartbeat_thread.join()
+
+        if result["status"] == "empty":
+            print(f"No data found for {symbol} {time_period}")
+        else:
+            print(
+                f"Successfully exported {result['total_records']} records for {symbol} {time_period} "
+                f"({result['timeframes_exported']} timeframes)"
+            )
+            for tf, details in result["timeframe_details"].items():
+                print(f"  tf={tf}: {details['records']} records -> {details['s3_key']}")
+
     except Exception as e:
         log_error("Export failed", symbol=symbol, time_period=time_period, error=str(e))
+        try:
+            if job_id:
+                client.fail_job(job_id, str(e))
+        except Exception as client_err:
+            log_error("Failed to report job failure", error=str(client_err))
         sys.exit(1)
-
-    if result["status"] == "empty":
-        print(f"No data found for {symbol} {time_period}")
-    else:
-        print(
-            f"Successfully exported {result['total_records']} records for {symbol} {time_period} "
-            f"({result['timeframes_exported']} timeframes)"
-        )
-        for tf, details in result["timeframe_details"].items():
-            print(f"  tf={tf}: {details['records']} records -> {details['s3_key']}")
 
 
 if __name__ == "__main__":

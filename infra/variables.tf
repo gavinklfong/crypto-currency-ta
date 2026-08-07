@@ -34,8 +34,9 @@ variable "job_scripts" {
   description = "Map of job script folder names to their local directory paths"
   type        = map(string)
   default = {
-    "ta-job" = "app/scripts/ta-job",
-    "common" = "app/common"
+    "ta-job"                       = "app/scripts/ta-job",
+    "export-quarterly-market-data" = "app/scripts/export-quarterly-market-data",
+    "common"                       = "app/common"
   }
 }
 
