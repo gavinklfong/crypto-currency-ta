@@ -35,10 +35,10 @@ TIMEFRAMES = {
 }
 
 def log_info(message, **kwargs):
-    logger.info(f"{message} | {json.dumps(kwargs)}")
+    log_info(f"{message} | {json.dumps(kwargs)}")
 
 def log_error(message, **kwargs):
-    logger.error(f"{message} | {json.dumps(kwargs)}")
+    log_error(f"{message} | {json.dumps(kwargs)}")
 
 
 def to_decimal(obj):

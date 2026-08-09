@@ -50,11 +50,11 @@ def _terminate_instance(instance_id, job_id, reason, slack_sns_topic_arn=None, j
         job_status = JobStatusClient()
         job_status.fail_job(job_id, f"TERMINATED_BY_MONITOR: {reason}")
 
-        logger.info("Successfully terminated instance %s and updated job %s.", instance_id, job_id)
+        log_info("Successfully terminated instance %s and updated job %s.", instance_id, job_id)
         return True, False
 
     except Exception as e:
-        logger.error("Error terminating instance %s for job %s: %s", instance_id, job_id, str(e))
+        log_error("Error terminating instance %s for job %s: %s", instance_id, job_id, str(e))
         return False, False
 
 
@@ -65,10 +65,10 @@ def lambda_handler(event, context):
     max_lifetime_hours = int(os.environ.get('MAX_LIFETIME_HOURS', 8))
 
     if not job_tracker_table:
-        logger.error("JOB_TRACKER_TABLE_NAME environment variable is not set")
+        log_error("JOB_TRACKER_TABLE_NAME environment variable is not set")
         return {'statusCode': 500, 'body': 'Missing JOB_TRACKER_TABLE_NAME'}
     if not slack_sns_topic_arn:
-        logger.error("SLACK_SNS_TOPIC_ARN environment variable is not set")
+        log_error("SLACK_SNS_TOPIC_ARN environment variable is not set")
         return {'statusCode': 500, 'body': 'Missing SLACK_SNS_TOPIC_ARN'}
 
     dynamodb = boto3.resource('dynamodb')

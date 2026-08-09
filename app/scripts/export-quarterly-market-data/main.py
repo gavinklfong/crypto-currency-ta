@@ -403,14 +403,11 @@ def main():
             heartbeat_thread.join()
 
         if result["status"] == "empty":
-            print(f"No data found for {symbol} {time_period}")
+            log_info("No data found", symbol=symbol, time_period=time_period)
         else:
-            print(
-                f"Successfully exported {result['total_records']} records for {symbol} {time_period} "
-                f"({result['timeframes_exported']} timeframes)"
-            )
+            log_info(f"Successfully exported {result['total_records']} records for {symbol} {time_period} ({result['timeframes_exported']} timeframes)")
             for tf, details in result["timeframe_details"].items():
-                print(f"  tf={tf}: {details['records']} records -> {details['s3_key']}")
+                log_info(f"tf={tf}: {details['records']} records -> {details['s3_key']}")
 
     except Exception as e:
         log_error("Export failed", symbol=symbol, time_period=time_period, error=str(e))

@@ -33,7 +33,7 @@ def handler(event, context):
         "error_message": "optional error description"
     }
     """
-    logger.info(f"Received event: {json.dumps(event)}")
+    log_info(f"Received event: {json.dumps(event)}")
     
     job_id = event.get('job_id')
     status = event.get('status')
@@ -42,7 +42,7 @@ def handler(event, context):
     error_message = event.get('error_message')
     
     if not job_id or not status:
-        logger.error(f"Missing required fields: job_id={job_id}, status={status}")
+        log_error(f"Missing required fields: job_id={job_id}, status={status}")
         raise ValueError("job_id and status are required")
     
     try:
@@ -64,7 +64,7 @@ def handler(event, context):
         }
         
     except Exception as e:
-        logger.error(f"Failed to update job {job_id}: {e}")
+        log_error(f"Failed to update job {job_id}: {e}")
         raise
 
 

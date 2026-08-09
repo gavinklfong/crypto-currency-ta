@@ -1,4 +1,5 @@
 import json
+from app.common.logger import log_info, log_error
 import requests
 import requests.exceptions
 import boto3
@@ -50,7 +51,7 @@ def _is_http_429(response):
 )
 def _fetch_ohlc_from_kraken(pair, interval):
     """Fetch OHLC data from Kraken API with automatic retry and backoff."""
-    logger.info("Fetching OHLC for pair=%s interval=%s", pair, interval)
+    log_info("Fetching OHLC for pair=%s interval=%s", pair, interval)
     response = requests.get(
         KRAKEN_OHLC_URL,
         params={"pair": pair, "interval": interval},
@@ -61,11 +62,9 @@ def _fetch_ohlc_from_kraken(pair, interval):
     return response
 
 
-def log_info(message, **kwargs):
-    logger.info(f"{message} | {json.dumps(kwargs)}")
+# removed
 
-def log_error(message, **kwargs):
-    logger.error(f"{message} | {json.dumps(kwargs)}")
+# removed
 
 def chunked(iterable, size=25):
     """Yield successive chunks of size N from iterable."""

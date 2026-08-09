@@ -11,6 +11,7 @@ import base64
 import boto3
 import json
 import logging
+from app.common.logger import log_info, log_error
 import os
 import uuid
 from dataclasses import dataclass
@@ -86,14 +87,14 @@ def validate_input(event: dict[str, Any]) -> ValidationError | None:
         )
 
     if not os.environ.get(ENV_LAUNCH_TEMPLATE_ID):
-        logger.error("Error: %s environment variable is not set.", ENV_LAUNCH_TEMPLATE_ID)
+        log_error("Error: %s environment variable is not set.", ENV_LAUNCH_TEMPLATE_ID)
         return ValidationError(
             status_code=500,
             message=f"{ENV_LAUNCH_TEMPLATE_ID} not set",
         )
 
     if not os.environ.get(ENV_JOB_SCRIPTS_BUCKET_NAME):
-        logger.error("Error: %s environment variable is not set.", ENV_JOB_SCRIPTS_BUCKET_NAME)
+        log_error("Error: %s environment variable is not set.", ENV_JOB_SCRIPTS_BUCKET_NAME)
         return ValidationError(
             status_code=500,
             message=f"{ENV_JOB_SCRIPTS_BUCKET_NAME} not set",
@@ -132,7 +133,7 @@ def resolve_instance_type(
     """
     key = event_instance_type_key or os.environ.get(ENV_INSTANCE_TYPE, DEFAULT_INSTANCE_TYPE_KEY)
     aws_type = INSTANCE_TYPE_MAP.get(key, INSTANCE_TYPE_MAP[DEFAULT_INSTANCE_TYPE_KEY])
-    logger.info(
+    log_info(
         "Selected instance type: %s (from key: %s)",
         aws_type,
         key,
@@ -275,7 +276,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             }
         }
     """
-    logger.info("Received event: %s", json.dumps(event))
+    log_info("Received event: %s", json.dumps(event))
 
     # 1. Validate inputs
     error = validate_input(event)
@@ -292,7 +293,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     instance_type = resolve_instance_type(detail.get("instance_type"))
     spot_enabled, spot_max_price = resolve_spot_config(event)
 
-    logger.info("Spot instances: %s", "enabled" if spot_enabled else "disabled")
+    log_info("Spot instances: %s", "enabled" if spot_enabled else "disabled")
 
     # 3. Initialise job tracker
     job_id = str(uuid.uuid4())
@@ -304,7 +305,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             instance_id="PENDING",
         )
     except Exception:
-        logger.error("Failed to initialise job tracker for job %s", job_id, exc_info=True)
+        log_error("Failed to initialise job tracker for job %s", job_id, exc_info=True)
         return {
             "statusCode": 500,
             "body": json.dumps({"error": "Failed to initialise job tracker"}),
@@ -326,7 +327,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     # 5. Launch EC2 instance
     ec2 = boto3.client("ec2")
-    logger.info(
+    log_info(
         "Launching EC2 with template %s, type %s",
         launch_template_id,
         instance_type,
@@ -335,7 +336,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     try:
         response = ec2.run_instances(**launch_kwargs)
         instance_id: str = response["Instances"][0]["InstanceId"]
-        logger.info("Successfully launched instance: %s", instance_id)
+        log_info("Successfully launched instance: %s", instance_id)
 
         # Update job tracker with the actual instance_id
         try:
@@ -361,7 +362,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         }
 
     except Exception:
-        logger.error("Failed to launch EC2 instance for job %s", job_id, exc_info=True)
+        log_error("Failed to launch EC2 instance for job %s", job_id, exc_info=True)
         try:
             job_status.fail_job(job_id, "EC2 Launch failed")
         except Exception:
