@@ -8,18 +8,13 @@ from decimal import Decimal
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+from common_utils import log_info, log_error
 
 MIN_REQUIRED = 20  # tune this: e.g., 20 for EMA20, 15 for RSI(14)+1, etc.
 
 dynamodb = boto3.resource("dynamodb")
 TABLE_NAME = "crypto-currency-ta-market-data"
 table = dynamodb.Table(TABLE_NAME)
-
-def log_info(message, **kwargs):
-    logger.info(f"{message} | {kwargs}")
-
-def log_error(message, **kwargs):
-    logger.error(f"{message} | {kwargs}")
 
 def D(x):
     return decimal.Decimal(str(x)) if x is not None else None

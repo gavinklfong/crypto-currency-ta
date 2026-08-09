@@ -7,6 +7,7 @@ import boto3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+from common_utils import log_info, log_error
 
 # Initialize the EventBridge client
 events = boto3.client("events")
@@ -14,12 +15,6 @@ events = boto3.client("events")
 DEFAULT_SYMBOLS = ["XXBTZUSD", "XETHZUSD"]
 CALCULATE_TA_TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
 AGGREGATE_TIMEFRAMES = ["5m", "15m", "30m", "1h", "4h", "1d"]
-
-def log_info(message, **kwargs):
-    logger.info(f"{message} | {json.dumps(kwargs)}")
-
-def log_error(message, **kwargs):
-    logger.error(f"{message} | {json.dumps(kwargs)}")
 
 def validateInput(target, symbol, timeframe, start_date, end_date):
 

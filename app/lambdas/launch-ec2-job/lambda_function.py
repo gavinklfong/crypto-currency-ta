@@ -11,7 +11,7 @@ import base64
 import boto3
 import json
 import logging
-from app.common.logger import log_info, log_error
+from common_utils import log_info, log_error
 import os
 import uuid
 from dataclasses import dataclass

@@ -5,12 +5,7 @@ import urllib.request
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-def log_info(message, **kwargs):
-    logger.info(f"{message} | {kwargs}")
-
-def log_error(message, **kwargs):
-    logger.error(f"{message} | {kwargs}")
+from common_utils import log_info, log_error
 
 def lambda_handler(event, context):
     # SNS event structure: event['Records'][0]['Sns']['Message']

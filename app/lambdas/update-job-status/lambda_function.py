@@ -13,6 +13,7 @@ import boto3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+from common_utils import log_info, log_error
 
 # DynamoDB Configuration
 JOB_TRACKER_TABLE = os.environ.get('JOB_TRACKER_TABLE', 'crypto-currency-ta-job-tracker')

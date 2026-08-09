@@ -1,5 +1,5 @@
 import json
-from app.common.logger import log_info, log_error
+from common_utils import log_info, log_error
 import requests
 import requests.exceptions
 import boto3

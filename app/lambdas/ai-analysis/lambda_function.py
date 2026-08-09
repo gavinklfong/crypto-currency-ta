@@ -8,6 +8,7 @@ from common_utils import send_to_sns
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+from common_utils import log_info, log_error
 
 dynamodb = boto3.resource("dynamodb")
 bedrock_runtime = boto3.client("bedrock-runtime")
@@ -72,12 +73,6 @@ Your output must follow this exact layout sequence. Do not include any introduct
     {data_json}
 </data>
 """
-
-def log_info(message, **kwargs):
-    logger.info(f"{message} | {kwargs}")
-
-def log_error(message, **kwargs):
-    logger.error(f"{message} | {kwargs}")
 
 def D(x):
     return Decimal(str(x)) if x is not None else None

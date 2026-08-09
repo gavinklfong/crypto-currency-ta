@@ -11,6 +11,7 @@ import logging
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+from common_utils import log_info, log_error
 
 dynamodb = boto3.resource("dynamodb")
 TABLE_NAME = "crypto-currency-ta-market-data"
@@ -33,12 +34,6 @@ TIMEFRAMES = {
     "1w": 7 * 24 * 60 * 60,
     "1M": 30 * 24 * 60 * 60,  # ~30 days
 }
-
-def log_info(message, **kwargs):
-    log_info(f"{message} | {json.dumps(kwargs)}")
-
-def log_error(message, **kwargs):
-    log_error(f"{message} | {json.dumps(kwargs)}")
 
 
 def to_decimal(obj):

@@ -7,6 +7,7 @@ import logging
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+from common_utils import log_info, log_error
 
 CANDLE_INTERVAL = 1  # 1-minute candles (triggered every 1 minute)
 KRAKEN_OHLC_URL = "https://api.kraken.com/0/public/OHLC"
@@ -15,12 +16,6 @@ DYNAMODB_TABLE_NAME = "crypto-currency-ta-market-data"
 events = boto3.client("events")
 dynamodb_client = boto3.client("dynamodb", region_name="us-east-2")
 
-
-def log_info(message, **kwargs):
-    logger.info(f"{message} | {json.dumps(kwargs)}")
-
-def log_error(message, **kwargs):
-    logger.error(f"{message} | {json.dumps(kwargs)}")
 
 def write_ohlc_to_dynamodb(pair, timeframe_minutes, ohlc_data):
     now_ts = int(datetime.now().timestamp())

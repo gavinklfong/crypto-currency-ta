@@ -9,6 +9,7 @@ from common_utils import send_to_sns
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+from common_utils import log_info, log_error
 
 ec2 = boto3.client('ec2')
 
