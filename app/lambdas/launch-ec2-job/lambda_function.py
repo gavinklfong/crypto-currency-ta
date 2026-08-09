@@ -195,6 +195,9 @@ def build_userdata(
         f"# Execute the TA job main script with job_payload as input\n"
         f"python3 /tmp/{job_script_name}/main.py '{job_payload}'\n\n"
 
+        f"# Upload job log to S3 for persistence\n"
+        f"aws s3 cp /tmp/job-${{TA_JOB_ID}}.log s3://{scripts_bucket}/logs/ta-job/${{TA_JOB_ID}}.log --quiet\n\n"
+
         f"# Sleep to allow logs to flush before shutdown\n"
         f"sleep {USER_DATA_SLEEP_SECONDS}\n\n"
 

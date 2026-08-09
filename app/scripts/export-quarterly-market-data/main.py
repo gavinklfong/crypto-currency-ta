@@ -25,7 +25,6 @@ S3 key format: <symbol>/<yyyy-QQ>/tf=<timeframe>/data.parquet
 """
 import sys
 import json
-import logging
 import argparse
 from datetime import datetime, timezone
 from typing import Tuple
@@ -37,12 +36,7 @@ import pyarrow.parquet as pq
 import io
 
 from common.job_status_client import JobStatusClient, HeartbeatThread
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+from common_utils import log_info, log_error
 
 # DynamoDB connection
 dynamodb = boto3.resource("dynamodb")
@@ -63,17 +57,6 @@ QUARTER_INFO = {
 
 # Supported timeframes
 SUPPORTED_TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
-
-
-# ------------------------------------------------------------
-# Logging helpers
-# ------------------------------------------------------------
-def log_info(message, **kwargs):
-    logger.info(f"{message} | {json.dumps(kwargs)}")
-
-
-def log_error(message, **kwargs):
-    logger.error(f"{message} | {json.dumps(kwargs)}")
 
 
 # ------------------------------------------------------------
@@ -307,7 +290,7 @@ def export_quarter(symbol: str, time_period: str, start_ts: int, end_ts: int,
         try:
             client.report_progress(job_id, progress)
         except Exception as e:
-            logger.warning("Failed to report progress", error=str(e))
+            log_error("Failed to report progress", error=str(e))
 
         log_info(
             "Timeframe exported",

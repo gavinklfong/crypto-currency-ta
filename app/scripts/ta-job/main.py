@@ -13,6 +13,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+_job_log_handler: logging.FileHandler | None = None
+
 
 def main():
     # Read job ID from environment variable
@@ -20,6 +22,16 @@ def main():
     if not job_id:
         logger.error("TA_JOB_ID environment variable is not set")
         sys.exit(1)
+
+    # Set up file log handler so logs survive after instance shutdown
+    global _job_log_handler
+    log_file = f"/tmp/job-{job_id}.log"
+    _job_log_handler = logging.FileHandler(log_file)
+    _job_log_handler.setLevel(logging.INFO)
+    _job_log_handler.setFormatter(logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    ))
+    logging.getLogger().addHandler(_job_log_handler)
 
     # Parse job params from first command-line argument (JSON)
     if len(sys.argv) < 2:
@@ -85,8 +97,17 @@ def main():
             if client:
                 client.fail_job(job_id, str(e))
         except Exception as client_err:
-            logger.error("Failed to report job failure: %s", str(client_err))
+            logger.error("Failed to report job failure: %s", client_err)
+        finally:
+            if _job_log_handler:
+                _job_log_handler.flush()
+                _job_log_handler.close()
         sys.exit(1)
+
+    finally:
+        if _job_log_handler:
+            _job_log_handler.flush()
+            _job_log_handler.close()
 
 if __name__ == "__main__":
     main()

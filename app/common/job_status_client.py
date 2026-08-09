@@ -123,15 +123,16 @@ class HeartbeatThread(threading.Thread):
         self.stop_event = threading.Event()
 
     def run(self):
-        print(f"Heartbeat thread started for job {self.job_id} (interval={self.interval}s)")
+        _thread_logger = logging.getLogger(__name__)
+        _thread_logger.info("Heartbeat thread started for job %s (interval=%ds)", self.job_id, self.interval)
         while not self.stop_event.is_set():
             try:
                 self.client.heartbeat(self.job_id)
             except Exception as e:
-                print(f"Heartbeat failed: {str(e)}")
+                _thread_logger.error("Heartbeat failed for job %s: %s", self.job_id, str(e))
 
             self.stop_event.wait(self.interval)
-        print(f"Heartbeat thread stopped for job {self.job_id}")
+        _thread_logger.info("Heartbeat thread stopped for job %s", self.job_id)
 
     def stop(self):
         self.stop_event.set()
