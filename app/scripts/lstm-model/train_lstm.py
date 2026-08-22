@@ -45,12 +45,12 @@ def prepare_data(data, window_size=60):
 def train_model(X_train, y_train, epochs=10, batch_size=32):
     """Defines and trains the LSTM model."""
     model = Sequential([
-        LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)),
-        Dropout(0.2),
-        LSTM(units=50, return_sequences=False),
-        Dropout(0.2),
-        Dense(units=25),
-        Dense(units=1)
+        LSTM(units=50, return_sequences=True, input_shape=(60, 1)),  # Layer 1
+        Dropout(0.2),                                                 # Dropout 1
+        LSTM(units=50, return_sequences=False),                      # Layer 2
+        Dropout(0.2),                                                 # Dropout 2
+        Dense(units=25),                                              # Hidden
+        Dense(units=1)                                                # Output
     ])
     
     model.compile(optimizer='adam', loss='mean_squared_error')
