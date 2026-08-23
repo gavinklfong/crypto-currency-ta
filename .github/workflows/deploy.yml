@@ -1,13 +1,13 @@
 name: Deploy Crypto Currency TA
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '**/*.py'
-      - '**/*.tf'
-      - '**/requirements*.txt'
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - '**/*.py'
+  #     - '**/*.tf'
+  #     - '**/requirements*.txt'
 
   workflow_dispatch:  # <-- allows manual Terraform-only runs
     inputs:
