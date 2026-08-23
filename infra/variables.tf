@@ -36,6 +36,7 @@ variable "job_scripts" {
   default = {
     "ta-job"                       = "app/scripts/ta-job",
     "export-quarterly-market-data" = "app/scripts/export-quarterly-market-data",
+    "lstm-train"                   = "app/scripts/lstm-model",
     "common"                       = "app/common"
   }
 }
@@ -149,51 +150,51 @@ variable "lambdas" {
   }))
   default = {
 
-"fetch-market-data" = {
-        function_name = "fetch-market-data"
-        zip_path      = "../build/package/lambdas/fetch-market-data.zip"
-        layers        = ["common-utils"]
-        # route_key     = "GET /trigger-fetch-market-data"
-        timeframes = ["1m"]
+    "fetch-market-data" = {
+      function_name = "fetch-market-data"
+      zip_path      = "../build/package/lambdas/fetch-market-data.zip"
+      layers        = ["common-utils"]
+      # route_key     = "GET /trigger-fetch-market-data"
+      timeframes = ["1m"]
     }
 
-"calculate-ta" = {
-        function_name = "calculate-ta"
-        zip_path      = "../build/package/lambdas/calculate-ta.zip"
-        layers        = ["common-utils"]
-        timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
+    "calculate-ta" = {
+      function_name = "calculate-ta"
+      zip_path      = "../build/package/lambdas/calculate-ta.zip"
+      layers        = ["common-utils"]
+      timeframes    = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
 
-"aggregate-timeframe" = {
-        function_name = "aggregate-timeframe"
-        zip_path      = "../build/package/lambdas/aggregate-timeframe.zip"
-        layers        = ["common-utils"]
-        timeframes    = ["5m", "15m", "30m", "1h", "4h", "1d", "1w"]
+    "aggregate-timeframe" = {
+      function_name = "aggregate-timeframe"
+      zip_path      = "../build/package/lambdas/aggregate-timeframe.zip"
+      layers        = ["common-utils"]
+      timeframes    = ["5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     }
 
-"rerun-controller" = {
-        function_name = "rerun-controller"
-        zip_path      = "../build/package/lambdas/rerun-controller.zip"
-        layers        = ["common-utils"]
-      }
+    "rerun-controller" = {
+      function_name = "rerun-controller"
+      zip_path      = "../build/package/lambdas/rerun-controller.zip"
+      layers        = ["common-utils"]
+    }
 
-"rerun-fetch-market-data" = {
-        function_name = "rerun-fetch-market-data"
-        zip_path      = "../build/package/lambdas/rerun-fetch-market-data.zip"
-        layers        = ["common-utils"]
-      }
+    "rerun-fetch-market-data" = {
+      function_name = "rerun-fetch-market-data"
+      zip_path      = "../build/package/lambdas/rerun-fetch-market-data.zip"
+      layers        = ["common-utils"]
+    }
 
-"launch-ec2-job" = {
-        function_name = "launch-ec2-job"
-        zip_path      = "../build/package/lambdas/launch-ec2-job.zip"
-        layers        = ["common-utils"]
-        is_launcher   = true
-        environment = {
-          INSTANCE_TYPE  = "small"
-          SPOT_ENABLED   = "false"
-          SPOT_MAX_PRICE = ""
-        }
+    "launch-ec2-job" = {
+      function_name = "launch-ec2-job"
+      zip_path      = "../build/package/lambdas/launch-ec2-job.zip"
+      layers        = ["common-utils"]
+      is_launcher   = true
+      environment = {
+        INSTANCE_TYPE  = "small"
+        SPOT_ENABLED   = "false"
+        SPOT_MAX_PRICE = ""
       }
+    }
 
     "ai-analysis" = {
       function_name = "ai-analysis"
@@ -204,11 +205,11 @@ variable "lambdas" {
       }
     }
 
-"send-to-slack" = {
-        function_name = "send-to-slack"
-        zip_path      = "../build/package/lambdas/send-to-slack.zip"
-        layers        = ["common-utils"]
-      }
+    "send-to-slack" = {
+      function_name = "send-to-slack"
+      zip_path      = "../build/package/lambdas/send-to-slack.zip"
+      layers        = ["common-utils"]
+    }
 
     "monitor-job-runner" = {
       function_name = "monitor-job-runner"
